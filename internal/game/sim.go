@@ -1,0 +1,616 @@
+package game
+
+import (
+	"math"
+
+	"permitdenied/internal/lot"
+	"permitdenied/internal/threats"
+)
+
+type aabb struct {
+	x, y, w, h float64
+}
+
+func (g *Game) stepPlay(in Input) {
+	// 1. Input already read.
+	// 2. Clock.
+	g.run.Tick++
+	if g.run.Tick >= BuzzerTick {
+		g.endRun("buzzer")
+		return
+	}
+
+	if g.dozer.IFrames > 0 {
+		g.dozer.IFrames--
+	}
+
+	// 3. Beat chart (once flags). Time() includes PressureBonus (§11).
+	g.fireBeats()
+
+	// 4. Chopper linger → PressureBonus += 0.35 * dt while inside spot.
+	if g.chopper.Active {
+		dx := g.dozer.X - g.chopper.X
+		dy := g.dozer.Y - g.chopper.Y
+		if dx*dx+dy*dy <= g.chopper.SpotR*g.chopper.SpotR {
+			g.run.PressureBonus += PressureRate * Dt
+		}
+	}
+
+	// 5. Steer / throttle / integrate candidate.
+	g.integrateDozer(in)
+
+	// 6. Blade toggle.
+	if in.BladeToggle {
+		g.dozer.BladeDown = !g.dozer.BladeDown
+	}
+
+	solids := g.collectSolids()
+
+	// 7. Resolve dozer vs solids. Slide along; do not tunnel.
+	stalled, overlapping := g.resolveDozer(solids)
+
+	bx, by, bw, bh := bladeAABB(g.dozer.X, g.dozer.Y, g.dozer.Heading, g.dozer.BladeDown)
+	bladeHitSolid := false
+	deepRubble := false
+	for _, s := range solids {
+		if aabbOverlap(bx, by, bw, bh, s.x, s.y, s.w, s.h) {
+			bladeHitSolid = true
+		}
+	}
+	for i := range g.lot.Rubble {
+		r := g.lot.Rubble[i]
+		if r.W*r.H >= DeepRubbleA {
+			if _, _, _, hit := CircleAABB(g.dozer.X, g.dozer.Y, DozerBodyR, r.X, r.Y, r.W, r.H); hit {
+				deepRubble = true
+			}
+		}
+	}
+
+	// 8. Blade-down wreck.
+	glanced := false
+	if g.dozer.BladeDown {
+		g.wreckWithBlade(bx, by, bw, bh)
+	} else {
+		// 9. Blade-up glance: body vs building.
+		for i := range g.lot.Buildings {
+			b := &g.lot.Buildings[i]
+			if b.State == lot.InRubble {
+				continue
+			}
+			if _, _, _, hit := CircleAABB(g.dozer.X, g.dozer.Y, DozerBodyR, b.X, b.Y, b.W, b.H); hit {
+				if !glanced {
+					g.dozer.Speed *= GlanceScale
+					glanced = true
+				}
+				if b.ApplyDamage(WreckRateUp * Dt) {
+					g.destroyBuilding(b)
+				}
+			}
+		}
+	}
+
+	// 10. Heat.
+	g.stepHeat(stalled, overlapping, bladeHitSolid, deepRubble)
+
+	// 11. Cruisers seek, collide.
+	g.stepCruisers()
+
+	// 12. Excavator boom if arrived.
+	g.stepExcavator(bx, by, bw, bh)
+
+	// 13. Chopper follows lazily (max 70 px/s).
+	g.stepChopper()
+
+	// 14. Peds wander; flatten garnish.
+	g.stepPeds()
+
+	// 15. Death.
+	if g.dozer.Plates <= 0 {
+		g.endRun("track")
+		return
+	}
+	if g.dozer.Heat >= HeatMax {
+		g.endRun("cooked")
+		return
+	}
+
+	// 16. Decay shake, dollar lives.
+	g.fx.Step(Dt, ShakeDecay)
+}
+
+func (g *Game) integrateDozer(in Input) {
+	turn := TurnRateBladeUp
+	if g.dozer.BladeDown {
+		turn = TurnRateBladeDown
+	}
+	g.dozer.Heading = wrapHeading(g.dozer.Heading + in.Steer*turn*Dt)
+
+	max := SpeedFwdUp
+	if in.Throttle < 0 {
+		max = SpeedRevUp
+		if g.dozer.BladeDown {
+			max = SpeedRevDown
+		}
+	} else if g.dozer.BladeDown {
+		max = SpeedFwdDown
+	}
+	target := max * in.Throttle
+	g.dozer.Speed = approachSpeed(g.dozer.Speed, target)
+
+	fx, fy := Forward(g.dozer.Heading)
+	g.dozer.X += fx * g.dozer.Speed * Dt
+	g.dozer.Y += fy * g.dozer.Speed * Dt
+}
+
+func approachSpeed(speed, target float64) float64 {
+	if speed == target {
+		return speed
+	}
+	var a float64
+	braking := (speed > 0 && target < speed) || (speed < 0 && target > speed)
+	if braking {
+		a = AccelBrake
+	} else if target < 0 || speed < 0 {
+		a = AccelRev
+	} else {
+		a = AccelFwd
+	}
+	if speed < target {
+		speed += a * Dt
+		if speed > target {
+			speed = target
+		}
+	} else {
+		speed -= a * Dt
+		if speed < target {
+			speed = target
+		}
+	}
+	return speed
+}
+
+func (g *Game) collectSolids() []aabb {
+	out := make([]aabb, 0, 32)
+	for i := range g.lot.Buildings {
+		b := g.lot.Buildings[i]
+		if b.State == lot.InRubble {
+			continue
+		}
+		out = append(out, aabb{b.X, b.Y, b.W, b.H})
+	}
+	for i := range g.lot.Rubble {
+		r := g.lot.Rubble[i]
+		out = append(out, aabb{r.X, r.Y, r.W, r.H})
+	}
+	for i := range g.blockers {
+		b := g.blockers[i]
+		if !b.Alive || !b.Solid {
+			continue
+		}
+		out = append(out, aabb{b.X, b.Y, b.W, b.H})
+	}
+	if g.excavator.Arrived && g.excavator.Alive {
+		x, y, w, h := g.excavator.Body()
+		out = append(out, aabb{x, y, w, h})
+	}
+	return out
+}
+
+func (g *Game) resolveDozer(solids []aabb) (stalled, overlapping bool) {
+	for iter := 0; iter < 3; iter++ {
+		for _, s := range solids {
+			nx, ny, pen, hit := CircleAABB(g.dozer.X, g.dozer.Y, DozerBodyR, s.x, s.y, s.w, s.h)
+			if !hit {
+				continue
+			}
+			overlapping = true
+			g.dozer.X += nx * pen
+			g.dozer.Y += ny * pen
+			fx, fy := Forward(g.dozer.Heading)
+			vx, vy := fx*g.dozer.Speed, fy*g.dozer.Speed
+			if vx*nx+vy*ny < 0 {
+				if g.dozer.Speed > 0 {
+					g.dozer.Speed = math.Min(g.dozer.Speed, 0)
+				} else {
+					g.dozer.Speed = math.Max(g.dozer.Speed, 0)
+				}
+			}
+		}
+	}
+	g.dozer.X = clamp(g.dozer.X, DozerBodyR, LotW-DozerBodyR)
+	g.dozer.Y = clamp(g.dozer.Y, DozerBodyR, LotH-DozerBodyR)
+	stalled = overlapping && math.Abs(g.dozer.Speed) < StallSpeed
+	return stalled, overlapping
+}
+
+func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
+	for i := range g.lot.Buildings {
+		b := &g.lot.Buildings[i]
+		if b.State == lot.InRubble {
+			continue
+		}
+		if !aabbOverlap(bx, by, bw, bh, b.X, b.Y, b.W, b.H) {
+			continue
+		}
+		if b.ApplyDamage(WreckRateDown * Dt) {
+			g.destroyBuilding(b)
+		}
+	}
+	for i := range g.blockers {
+		bl := &g.blockers[i]
+		if !bl.Alive || !bl.Solid {
+			continue
+		}
+		if !aabbOverlap(bx, by, bw, bh, bl.X, bl.Y, bl.W, bl.H) {
+			continue
+		}
+		bl.HP -= WreckRateDown * Dt
+		if bl.HP <= 0 {
+			g.killBlocker(bl)
+		}
+	}
+}
+
+func (g *Game) destroyBuilding(b *lot.Building) {
+	g.lot.AddRubble(b.X, b.Y, b.W, b.H, RubbleInset)
+	g.run.StructCash += b.Value
+	cx, cy := b.Center()
+	g.fx.SpawnDollar(cx, cy, b.Value, DollarLife)
+	g.fx.HitStop = HitStopTicks
+	g.fx.Shake += ShakeWreck
+	g.audio.Crunch()
+	if b.ID != lot.TargetNone {
+		g.fireBoon(b.ID)
+	}
+}
+
+func (g *Game) killBlocker(bl *threats.Blocker) {
+	bl.Alive = false
+	bl.Solid = false
+	g.lot.AddRubble(bl.X, bl.Y, bl.W, bl.H, RubbleInset)
+	g.fx.HitStop = HitStopTicks
+	g.fx.Shake += ShakeWreck * 0.6
+	g.audio.Crunch()
+	if bl.Kind == threats.BlockerDump {
+		g.run.VehicleCash += DumpCash
+		g.fx.SpawnDollar(bl.X+bl.W/2, bl.Y+bl.H/2, DumpCash, DollarLife)
+	}
+}
+
+func (g *Game) fireBoon(id lot.TargetID) {
+	switch id {
+	case lot.TargetSheriff:
+		if g.run.SheriffDown {
+			return
+		}
+		g.run.SheriffDown = true
+		g.run.CruiserPIT = false
+		g.fx.SetBanner("PERMIT: PIT MANEUVER REVOKED", BannerLife)
+	case lot.TargetYard:
+		if g.run.YardDown {
+			return
+		}
+		g.run.YardDown = true
+		g.run.DumpTrucks = false
+		g.run.WallsBrittle = true
+		for i := range g.blockers {
+			b := &g.blockers[i]
+			if b.Kind == threats.BlockerDump && b.Alive {
+				b.Alive = false
+				b.Solid = false
+			}
+			if b.Kind == threats.BlockerJersey && b.Alive {
+				if b.HP > JerseyBrittleHP {
+					b.HP = JerseyBrittleHP
+				}
+			}
+		}
+		g.fx.SetBanner("PERMIT: PUBLIC WORKS CLOSED", BannerLife)
+	case lot.TargetPlant:
+		if g.run.PlantDown {
+			return
+		}
+		g.run.PlantDown = true
+		g.run.ConcreteSets = false
+		for i := range g.blockers {
+			b := &g.blockers[i]
+			if b.Kind == threats.BlockerConcrete && !b.Set {
+				b.Solid = true
+				b.HP = ConcreteUnsetHP
+			}
+		}
+		g.fx.SetBanner("PERMIT: MIX NEVER SETS", BannerLife)
+	}
+	g.run.RecountTargets()
+}
+
+func (g *Game) stepHeat(stalled, overlapping, bladeHitSolid, deepRubble bool) {
+	h := g.dozer.Heat
+	switch {
+	case stalled:
+		h += HeatCookStall * Dt
+	case g.dozer.BladeDown && (bladeHitSolid || deepRubble):
+		h += HeatCookPush * Dt
+	case !g.dozer.BladeDown && !overlapping:
+		h -= HeatCoolAsphalt * Dt
+	default:
+		h -= HeatCoolIdle * Dt
+	}
+	g.dozer.Heat = clamp(h, 0, HeatMax)
+}
+
+func (g *Game) stepCruisers() {
+	fx, fy := Forward(g.dozer.Heading)
+	rx, ry := Right(g.dozer.Heading)
+	for i := range g.cruisers {
+		c := &g.cruisers[i]
+		if !c.Alive {
+			continue
+		}
+		side := 1.0
+		if i%2 == 0 {
+			side = -1
+		}
+		tx := g.dozer.X - fx*CruiserOffsetF + rx*side*CruiserOffsetS
+		ty := g.dozer.Y - fy*CruiserOffsetF + ry*side*CruiserOffsetS
+		dx, dy := tx-c.X, ty-c.Y
+		dist := hypot(dx, dy)
+		if dist > 1 {
+			c.X += dx / dist * CruiserSpeed * Dt
+			c.Y += dy / dist * CruiserSpeed * Dt
+			c.Heading = math.Atan2(dx, -dy)
+		}
+		c.X = clamp(c.X, CruiserRadius, LotW-CruiserRadius)
+		c.Y = clamp(c.Y, CruiserRadius, LotH-CruiserRadius)
+
+		ddx, ddy := c.X-g.dozer.X, c.Y-g.dozer.Y
+		if ddx*ddx+ddy*ddy >= (DozerBodyR+CruiserRadius)*(DozerBodyR+CruiserRadius) {
+			continue
+		}
+		along := ddx*fx + ddy*fy
+		front := along > FrontAlong
+		if front && g.dozer.BladeDown {
+			c.Alive = false
+			g.run.VehicleCash += CruiserKillCash
+			g.fx.SpawnDollar(c.X, c.Y, CruiserKillCash, DollarLife)
+			g.fx.Shake += ShakeWreck * 0.4
+			g.audio.Crunch()
+			continue
+		}
+		if !front && g.dozer.BladeDown == false && g.dozer.IFrames == 0 && g.run.CruiserPIT {
+			g.peel("cruiser")
+		}
+		// bounce
+		n := hypot(ddx, ddy)
+		if n < 1e-6 {
+			n = 1
+			ddx, ddy = 0, -1
+		}
+		c.X += ddx / n * 18
+		c.Y += ddy / n * 18
+	}
+}
+
+func (g *Game) peel(_ string) {
+	if g.dozer.Plates <= 0 {
+		return
+	}
+	g.dozer.Plates--
+	g.dozer.IFrames = IFramesPeel
+	g.fx.Shake += ShakePeel
+	g.audio.Crunch()
+}
+
+func (g *Game) stepExcavator(bx, by, bw, bh float64) {
+	ex := &g.excavator
+	if !ex.Arrived || !ex.Alive {
+		return
+	}
+	ex.Swinging = true
+	// buried: rubble overlapping boom origin + right*20
+	rrx, rry := Right(ex.Heading)
+	originX := ex.X + rrx*20
+	originY := ex.Y + rry*20
+	buried := g.lot.RubbleBlocks(originX-8, originY-8, 16, 16)
+
+	if !buried {
+		ex.BoomPhase += Dt / BoomPeriod
+		if ex.BoomPhase >= 1 {
+			ex.BoomPhase -= 1
+		}
+		ang := (ex.BoomPhase - 0.5) * BoomSweep
+		hdg := wrapHeading(ex.Heading + ang)
+		fx, fy := Forward(hdg)
+		x0, y0 := ex.X, ex.Y
+		x1, y1 := ex.X+fx*BoomLen, ex.Y+fy*BoomLen
+		if distPointSeg(g.dozer.X, g.dozer.Y, x0, y0, x1, y1) < DozerBodyR+BoomHalfW {
+			if g.dozer.IFrames == 0 {
+				g.dozer.Plates--
+				g.dozer.IFrames = IFramesBoom
+				g.fx.Shake += ShakePeel
+				g.audio.Crunch()
+			}
+		}
+	}
+
+	// Blade-down body ram: excavator HP 40, you cook (heat handled via solid overlap).
+	if g.dozer.BladeDown {
+		exx, exy, exw, exh := ex.Body()
+		if aabbOverlap(bx, by, bw, bh, exx, exy, exw, exh) {
+			ex.HP -= WreckRateDown * Dt
+			if ex.HP <= 0 {
+				ex.Alive = false
+				g.run.VehicleCash += ExcavatorKillCash
+				g.fx.SpawnDollar(ex.X, ex.Y, ExcavatorKillCash, DollarLife)
+				g.fx.HitStop = HitStopTicks
+				g.fx.Shake += ShakePeel
+				g.audio.Crunch()
+			}
+		}
+	}
+}
+
+func (g *Game) stepChopper() {
+	if !g.chopper.Active {
+		return
+	}
+	dx := g.dozer.X - g.chopper.X
+	dy := g.dozer.Y - g.chopper.Y
+	dist := hypot(dx, dy)
+	if dist > 1 {
+		step := ChopperSpeed * Dt
+		if step > dist {
+			step = dist
+		}
+		g.chopper.X += dx / dist * step
+		g.chopper.Y += dy / dist * step
+	}
+}
+
+func (g *Game) stepPeds() {
+	for i := range g.peds {
+		p := &g.peds[i]
+		if !p.Alive {
+			continue
+		}
+		p.Wait -= Dt
+		if p.Wait <= 0 {
+			p.Heading = wrapHeading(p.Heading + 0.9)
+			p.Wait = 1.4 + float64(i)*0.17
+		}
+		fx, fy := Forward(p.Heading)
+		p.X = clamp(p.X+fx*PedWanderSpeed*Dt, PedRadius, LotW-PedRadius)
+		p.Y = clamp(p.Y+fy*PedWanderSpeed*Dt, PedRadius, LotH-PedRadius)
+		dx, dy := p.X-g.dozer.X, p.Y-g.dozer.Y
+		if dx*dx+dy*dy < (DozerBodyR+PedRadius)*(DozerBodyR+PedRadius) && math.Abs(g.dozer.Speed) > FlattenSpeed {
+			p.Alive = false
+			g.run.VehicleCash += PedCash
+			g.fx.SpawnDollar(p.X, p.Y, PedCash, DollarLife)
+		}
+	}
+}
+
+func (g *Game) fireBeats() {
+	t := g.run.Time()
+	if !g.beat.cruisers0 && t >= 0 {
+		g.beat.cruisers0 = true
+		g.spawnCruisers(2)
+	}
+	if !g.beat.blockers && t >= TBlockers {
+		g.beat.blockers = true
+		g.blockers = append(g.blockers,
+			threats.Jersey(248, 1000, 48, 16, jerseyHPNow(g.run.WallsBrittle)),
+			threats.Jersey(344, 860, 48, 16, jerseyHPNow(g.run.WallsBrittle)),
+			threats.Jersey(248, 480, 56, 16, jerseyHPNow(g.run.WallsBrittle)),
+		)
+		if g.run.DumpTrucks {
+			g.blockers = append(g.blockers, threats.Dump(300, 720, 40, 24, DumpHP))
+		}
+		g.spawnCruisers(1) // §12: +1 at 40 s
+	}
+	if !g.beat.chopper && t >= TChopper {
+		g.beat.chopper = true
+		g.chopper.Active = true
+		g.chopper.SpotR = ChopperSpotR
+		if g.chopper.X == 0 && g.chopper.Y == 0 {
+			g.chopper.X, g.chopper.Y = 320, 40
+		}
+	}
+	if !g.beat.exAnn && t >= TExAnnounce {
+		g.beat.exAnn = true
+		g.excavator.Announced = true
+		g.fx.SetBanner("HEAVY EN ROUTE", BannerLife)
+	}
+	if !g.beat.exArr && t >= TExArrive {
+		g.beat.exArr = true
+		if !g.run.YardDown {
+			g.placeExcavator()
+		}
+		// yard already rubble → skip forever
+	}
+	if !g.beat.concrete && t >= TConcreteSet {
+		g.beat.concrete = true
+		for i := range g.blockers {
+			b := &g.blockers[i]
+			if b.Kind != threats.BlockerConcrete || !b.Alive {
+				continue
+			}
+			if g.run.ConcreteSets {
+				b.Set = true
+				b.Solid = true
+				b.HP = ConcreteSetHP
+			} else {
+				b.Set = false
+				b.Solid = true
+				b.HP = ConcreteUnsetHP
+			}
+		}
+	}
+	if !g.beat.twoFam && t >= TTwoFamilies {
+		g.beat.twoFam = true
+		g.spawnCruisers(2)
+		if g.excavator.Alive && g.excavator.Arrived {
+			g.excavator.Swinging = true
+		}
+		if !g.excavator.Alive && g.run.DumpTrucks {
+			g.blockers = append(g.blockers, threats.Dump(310, 600, 40, 24, DumpHP))
+		}
+	}
+}
+
+func jerseyHPNow(brittle bool) float64 {
+	if brittle {
+		return JerseyBrittleHP
+	}
+	return JerseyHP
+}
+
+func (g *Game) placeExcavator() {
+	x, y := 288.0, 520.0
+	if g.lot.RubbleBlocks(x-16, y-16, 32, 32) {
+		x, y = 288, 360
+	}
+	g.excavator = threats.Excavator{
+		X: x, Y: y,
+		Heading:   math.Pi, // south
+		Announced: true,
+		Arrived:   true,
+		Alive:     true,
+		HP:        ExcavatorHP,
+		Swinging:  true,
+	}
+}
+
+func (g *Game) spawnCruisers(n int) {
+	spots := [][2]float64{
+		{280, 760}, {360, 800}, {320, 900},
+		{260, 700}, {380, 700}, {300, 850},
+	}
+	alive := 0
+	for _, c := range g.cruisers {
+		if c.Alive {
+			alive++
+		}
+	}
+	i := 0
+	for n > 0 && alive < CruiserCap {
+		s := spots[i%len(spots)]
+		off := float64(i / len(spots) * 14)
+		g.cruisers = append(g.cruisers, threats.SpawnCruiser(s[0]+off, s[1]+off))
+		n--
+		alive++
+		i++
+	}
+}
+
+func (g *Game) endRun(death string) {
+	if g.run.Over {
+		return
+	}
+	g.run.Over = true
+	g.run.Death = death
+	g.run.TimeAlive = math.Min(g.run.Time(), RunSeconds)
+	g.run.RecountTargets()
+	g.scene = SceneTally
+	g.fx.TallyT = 0
+}
