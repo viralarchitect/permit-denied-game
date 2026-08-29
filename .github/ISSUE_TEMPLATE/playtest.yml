@@ -1,0 +1,47 @@
+name: Playtest
+description: A show-off test failed, or heat / plates / rubble are not readable in play.
+title: "[Playtest]: "
+labels: ["playtest"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the lot is playable but the **show-off tests** in `README.md` fail, or the fantasy is unreadable (heat, plates, stolen streets).
+
+  - type: dropdown
+    id: which-test
+    attributes:
+      label: Which show-off test failed
+      options:
+        - "1 — New player dies inside 90s without a tooltip wall"
+        - "2 — Learned player can judge time from the plant pip"
+        - "3 — Coward run (×1.0) vs two-target run (×1.6) cash out differently"
+        - "4 — Heat and plates readable from the sprite (no numeric bars required)"
+        - "5 — Player-made rubble steals a street on the drag"
+        - Feel / readability (not one of the five)
+    validations:
+      required: true
+
+  - type: textarea
+    id: session
+    attributes:
+      label: What you did
+      description: Stance, targets smashed, roughly when it went wrong (clock or F2 `T=`).
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: What went wrong
+      description: What a player cannot read or cannot do. Prefer “I could not tell heat from the sprite” over “add an HP bar.”
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra
+      description: Screenshot of the lot, pips, or tally. Drag files onto this field.
+    validations:
+      required: false

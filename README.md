@@ -15,6 +15,17 @@ go run ./cmd/permitdenied
 
 Window starts at 1280×896 (4× a 320×224 logical screen). Resize is enabled; the sim stays 60 TPS.
 
+## Build
+
+**Local (Windows):** double-click or run `build.bat`. It runs tests, then writes `dist\permitdenied.exe` (console left on for debugging). Do not commit the exe.
+
+```bat
+build.bat
+dist\permitdenied.exe
+```
+
+**CI:** GitHub Actions (`.github/workflows/windows-package.yml`) builds a GUI exe (`-H windowsgui`), uploads it as the `permitdenied-windows-amd64` workflow artifact on push/PR, and attaches it to a GitHub Release when you push a `v*` tag (for example `v1.0.0`).
+
 ## Keys
 
 | Key | Action |
@@ -56,3 +67,12 @@ Covered by `go test ./...`:
 - Spawn, A 0.5 s → heading west-of-north
 - Blade down, push sheriff → HP drops
 - `TestForwardVector` and `TestMultTable`
+
+## Contributing
+
+One lot. Same strip every run. See [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
+
+- Issues: bug, playtest, or change forms in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/)
+- PRs: [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)
+- Security: [`.github/SECURITY.md`](.github/SECURITY.md)
+- Help: [`.github/SUPPORT.md`](.github/SUPPORT.md)

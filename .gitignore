@@ -2,6 +2,9 @@
 /permitdenied
 /permitdenied.exe
 *.exe
+dist/
+
+# Go
 
 # Go
 *.test
@@ -11,3 +14,6 @@ vendor/
 # OS
 .DS_Store
 Thumbs.db
+
+# Cursor hook runtime
+.cursor/hooks/state/
