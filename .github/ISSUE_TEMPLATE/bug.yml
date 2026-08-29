@@ -1,0 +1,73 @@
+name: Bug
+description: Crash, wrong controls, scoring, beat chart, render, or CI.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. This is a one-lot prototype — read `README.md` and `PERMIT_DENIED.md` before filing.
+
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Existing issues
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Crash or hang
+        - Controls / tank-steer
+        - Heat, plates, or combat
+        - Beat chart / threats
+        - Score / tally
+        - Rendering / assets
+        - Build / CI
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. `go run ./cmd/permitdenied` (or build.bat)
+        2. Start a run
+        3. Hold W from spawn
+        4. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - OS:
+        - Go version (`go version`):
+        - How you ran it (`go run` / `build.bat` / CI artifact):
+        - F2 overlay notes (if useful):
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra
+      description: Screenshots, F2 dump, or `go test ./...` output. Drag files onto this field.
+    validations:
+      required: false
