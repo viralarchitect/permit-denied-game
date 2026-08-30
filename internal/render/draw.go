@@ -52,6 +52,7 @@ type View struct {
 	Speed                      float64
 	Debug                      bool
 	Time                       float64
+	HideStance                 bool
 }
 
 type Tally struct {
@@ -104,13 +105,15 @@ func DrawHUD(dst *ebiten.Image, v View) {
 
 	drawPips(dst, v)
 
-	stance := "BLADE UP"
-	sc := ColStanceUp
-	if v.BladeDown {
-		stance = "BLADE DOWN"
-		sc = ColStanceDn
+	if !v.HideStance {
+		stance := "BLADE UP"
+		sc := ColStanceUp
+		if v.BladeDown {
+			stance = "BLADE DOWN"
+			sc = ColStanceDn
+		}
+		drawText(dst, stance, 4, float64(screenH-14), sc)
 	}
-	drawText(dst, stance, 4, float64(screenH-14), sc)
 
 	if v.Debug {
 		line := fmt.Sprintf("T=%.1f PIT=%d DUMP=%d SET=%d YARD=%d",
@@ -152,9 +155,15 @@ func DrawTitle(dst *ebiten.Image) {
 }
 
 const (
-	tallyStripY = 156
-	tallyStripH = 68
+	tallyStripY = 136
+	tallyStripH = 88
+	tallyFirstY = 16
+	tallyLineH  = 14
 )
+
+func tallyStatY(i int) float64 {
+	return float64(tallyStripY + tallyFirstY + i*tallyLineH)
+}
 
 func DrawTally(dst *ebiten.Image, t Tally) {
 	fill(dst, 0, tallyStripY, screenW, tallyStripH, ColPanel)
@@ -167,29 +176,24 @@ func DrawTally(dst *ebiten.Image, t Tally) {
 	}
 	drawText(dst, death, 8, tallyStripY+2, ColRust)
 
-	y := float64(tallyStripY + 16)
 	if t.T >= 0.2 {
-		drawText(dst, fmt.Sprintf("STRUCTURE  $%d", t.StructCash), 8, y, ColMoney)
+		drawText(dst, fmt.Sprintf("STRUCTURE  $%d", t.StructCash), 8, tallyStatY(0), ColMoney)
 	}
-	y += 14
 	if t.T >= 0.45 {
-		drawText(dst, fmt.Sprintf("VEHICLE    $%d", t.VehicleCash), 8, y, ColMoney)
+		drawText(dst, fmt.Sprintf("VEHICLE    $%d", t.VehicleCash), 8, tallyStatY(1), ColMoney)
 	}
-	y += 14
 	if t.T >= 0.7 {
-		drawText(dst, fmt.Sprintf("TIME       %d", int(t.Time)), 8, y, ColHUD)
+		drawText(dst, fmt.Sprintf("TIME       %d", int(t.Time)), 8, tallyStatY(2), ColHUD)
 	}
-	y += 14
 	if t.T >= 0.95 {
-		drawText(dst, fmt.Sprintf("TARGETS    %d ×%s", t.Targets, multLabel(t.Targets)), 8, y, ColPlantPip)
+		drawText(dst, fmt.Sprintf("TARGETS    %d ×%s", t.Targets, multLabel(t.Targets)), 8, tallyStatY(3), ColPlantPip)
 	}
-	y += 14
 	if t.T >= 1.2 {
-		drawText(dst, fmt.Sprintf("TOTAL      %d", t.Total), 8, y, ColPaint)
+		drawText(dst, fmt.Sprintf("TOTAL      %d", t.Total), 8, tallyStatY(4), ColPaint)
 	}
 	if t.T >= 1.4 {
 		drawText(dst, "THE COUNTY SAID NO.", 148, float64(tallyStripY+2), ColHUD)
-		drawText(dst, "SPACE / TAP — AGAIN", 148, float64(tallyStripY+52), ColHUD)
+		drawText(dst, "SPACE / TAP — AGAIN", 148, tallyStatY(4), ColHUD)
 	}
 }
 
