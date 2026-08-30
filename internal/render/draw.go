@@ -39,6 +39,7 @@ type View struct {
 	Chopper                    threats.Chopper
 	Peds                       []threats.Ped
 	Dollars                    []fx.Dollar
+	Bursts                     []fx.Burst
 	Banner                     string
 	BannerT                    float64
 	RunTick                    int
@@ -80,6 +81,7 @@ func DrawWorld(dst *ebiten.Image, v View) {
 	drawExcavator(dst, v, a)
 	drawDozer(dst, v, a)
 	drawChopper(dst, v, a)
+	drawBursts(dst, v, a)
 	drawDollars(dst, v, a)
 	drawBanner(dst, v)
 }
@@ -404,6 +406,17 @@ func drawChopper(dst *ebiten.Image, v View, a *atlas) {
 	vector.FillCircle(dst, float32(sx), float32(sy), float32(c.SpotR), ColSpot, true)
 	frame := (v.Tick / 2) % 4
 	blitFrame(dst, a, fmt.Sprintf("chopper_%d", frame), sx, sy)
+}
+
+func drawBursts(dst *ebiten.Image, v View, a *atlas) {
+	for _, b := range v.Bursts {
+		name := b.FrameName()
+		if name == "boom_05" {
+			continue
+		}
+		sx, sy := world(v, b.X, b.Y)
+		blitFrame(dst, a, name, sx, sy)
+	}
 }
 
 func drawDollars(dst *ebiten.Image, v View, a *atlas) {

@@ -7,6 +7,7 @@ import (
 
 	"permitdenied/assets"
 	"permitdenied/internal/dozer"
+	"permitdenied/internal/fx"
 	"permitdenied/internal/lot"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -51,6 +52,7 @@ func TestAtlasLoad(t *testing.T) {
 		"excavator_00", "excavator_14", "chopper_0", "chopper_3",
 		"ped", "pip_amber", "pip_rust", "pip_cyan",
 		"building_intact", "building_cracked", "building_rubble", "dollar",
+		"boom_00", "boom_04", "spark_00", "spark_03",
 	}
 	for _, name := range required {
 		if _, ok := a.frames[name]; !ok {
@@ -95,4 +97,29 @@ func TestDrawWorldSmoke(t *testing.T) {
 		Buildings: l.Buildings,
 	})
 	DrawTitle(dst)
+}
+
+func TestDrawBurstMissingFrameIsSilent(t *testing.T) {
+	dst := ebiten.NewImage(screenW, screenH)
+	a, err := ensureAtlas()
+	if err != nil {
+		t.Fatal(err)
+	}
+	drawBursts(dst, View{
+		CamX: 160, CamY: 1068,
+		Bursts: []fx.Burst{{X: 320, Y: 1180, Kind: fx.BurstBoom}},
+	}, a)
+}
+
+func TestDrawBoomOnSheriffCrop(t *testing.T) {
+	dst := ebiten.NewImage(screenW, screenH)
+	l := lot.New(2)
+	d := dozer.Spawn(224, 700)
+	v := View{
+		CamX: 224 - 160, CamY: 680 - 112,
+		Dozer:     d,
+		Buildings: l.Buildings,
+		Bursts:    []fx.Burst{{X: 224, Y: 680, Kind: fx.BurstBoom}},
+	}
+	DrawWorld(dst, v)
 }

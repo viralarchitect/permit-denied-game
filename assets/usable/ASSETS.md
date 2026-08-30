@@ -95,7 +95,17 @@ ped
 pip_amber / pip_rust / pip_cyan
 building_intact|cracked|rubble // 16×16 stamp if you tile roofs later
 dollar
+boom_00 .. boom_05            // 48×48 smash, draw-only, no AABB
+spark_00 .. spark_03          // 16×16 glance / jersey chip
 ```
+
+Regenerate smash frames and WAVs from the repo root:
+
+```
+go run ./cmd/genfx
+```
+
+That restamps `sprites.png` and writes `usable/sfx/{wreck,peel,burst}.wav`. It does not rewrite `sprites.json` if `boom_00` already exists.
 
 Plate / heat: keep **one** 16-facing set (`dozer_up_*` / `dozer_down_*`) and `ColorScale` toward primer / rust / frame / `#C04040`. The plate preview frames are for artists, not extra draw paths.
 

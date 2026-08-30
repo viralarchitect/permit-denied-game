@@ -12,6 +12,7 @@ type FX struct {
 	HitStop int
 	Shake   float64
 	Dollars []Dollar
+	Bursts  []Burst
 	Banner  string
 	BannerT float64
 	TallyT  float64
@@ -51,6 +52,17 @@ func (f *FX) Step(dt, shakeDecay float64) {
 		n++
 	}
 	f.Dollars = f.Dollars[:n]
+	bn := 0
+	for i := range f.Bursts {
+		b := f.Bursts[i]
+		b.Age++
+		if b.Dead() {
+			continue
+		}
+		f.Bursts[bn] = b
+		bn++
+	}
+	f.Bursts = f.Bursts[:bn]
 }
 
 func (f *FX) Offsets(tick int) (sx, sy float64) {

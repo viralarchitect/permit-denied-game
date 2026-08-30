@@ -2,18 +2,27 @@ package audio
 
 import (
 	"bytes"
+	"io"
 	"math"
 	"sync"
+
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
+	"permitdenied/assets"
 
 	ebitenaudio "github.com/hajimehoshi/ebiten/v2/audio"
 )
 
-// Audio is two channels: chase loop + crunch one-shot. Milestone 6, not a blocker.
+const oneShotCap = 3
+
 type Audio struct {
 	mu      sync.Mutex
 	ctx     *ebitenaudio.Context
 	chase   *ebitenaudio.Player
+	shots   [oneShotCap]*ebitenaudio.Player
 	crunchB []byte
+	wreckB  []byte
+	peelB   []byte
+	burstB  []byte
 	ready   bool
 }
 
@@ -31,6 +40,18 @@ func (a *Audio) ensure() {
 	}
 	a.ctx = ctx
 	a.crunchB = genCrunch(44100)
+	a.wreckB = loadSample("wreck.wav")
+	a.peelB = loadSample("peel.wav")
+	a.burstB = loadSample("burst.wav")
+	if len(a.wreckB) == 0 {
+		a.wreckB = a.crunchB
+	}
+	if len(a.peelB) == 0 {
+		a.peelB = a.crunchB
+	}
+	if len(a.burstB) == 0 {
+		a.burstB = a.crunchB
+	}
 	loop := genChase(44100)
 	src := ebitenaudio.NewInfiniteLoop(bytes.NewReader(loop), int64(len(loop)))
 	p, err := a.ctx.NewPlayer(src)
@@ -70,22 +91,58 @@ func (a *Audio) Duck(tally bool) {
 	}
 }
 
-func (a *Audio) Crunch() {
+func (a *Audio) Crunch() { a.Wreck() }
+
+func (a *Audio) Wreck() { a.play(func(x *Audio) []byte { return x.wreckB }) }
+
+func (a *Audio) Peel() { a.play(func(x *Audio) []byte { return x.peelB }) }
+
+func (a *Audio) Burst() { a.play(func(x *Audio) []byte { return x.burstB }) }
+
+func (a *Audio) play(pcm func(*Audio) []byte) {
 	if a == nil {
 		return
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.ensure()
-	if a.ctx == nil || len(a.crunchB) == 0 {
+	b := pcm(a)
+	if a.ctx == nil || len(b) == 0 {
 		return
 	}
-	p, err := a.ctx.NewPlayer(bytes.NewReader(a.crunchB))
-	if err != nil {
-		return
+	slot := -1
+	for i, p := range a.shots {
+		if p == nil || !p.IsPlaying() {
+			slot = i
+			break
+		}
 	}
+	if slot < 0 {
+		slot = 0
+		if a.shots[0] != nil {
+			a.shots[0].Pause()
+		}
+	}
+	p := a.ctx.NewPlayerFromBytes(b)
 	p.SetVolume(0.55)
+	a.shots[slot] = p
 	p.Play()
+}
+
+func loadSample(name string) []byte {
+	raw, err := assets.FS.ReadFile("usable/sfx/" + name)
+	if err != nil {
+		return nil
+	}
+	st, err := wav.DecodeWithSampleRate(44100, bytes.NewReader(raw))
+	if err != nil {
+		return nil
+	}
+	out, err := io.ReadAll(st)
+	if err != nil {
+		return nil
+	}
+	return out
 }
 
 func (a *Audio) Stop() {
@@ -96,6 +153,12 @@ func (a *Audio) Stop() {
 	defer a.mu.Unlock()
 	if a.chase != nil {
 		a.chase.Pause()
+	}
+	for i, p := range a.shots {
+		if p != nil {
+			p.Pause()
+			a.shots[i] = nil
+		}
 	}
 }
 
