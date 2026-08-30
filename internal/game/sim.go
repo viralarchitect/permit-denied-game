@@ -68,10 +68,12 @@ func (g *Game) stepPlay(in Input) {
 	// 8. Blade-down wreck.
 	if g.dozer.BladeDown {
 		g.glanceLatch = false
-		g.wreckWithBlade(bx, by, bw, bh)
+		eating := g.wreckWithBlade(bx, by, bw, bh)
+		g.audio.DuckWreck(eating)
 	} else {
 		g.jerseyLatch = map[int]struct{}{}
 		g.glanceBuildings()
+		g.audio.DuckWreck(false)
 	}
 
 	// 10. Heat.

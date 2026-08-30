@@ -226,6 +226,10 @@ func blitFrameTint(dst *ebiten.Image, a *atlas, name string, cx, cy float64, tin
 }
 
 func blitFrameTL(dst *ebiten.Image, a *atlas, name string, sx, sy float64) {
+	blitFrameTLScale(dst, a, name, sx, sy, 1, 1, 1)
+}
+
+func blitFrameTLScale(dst *ebiten.Image, a *atlas, name string, sx, sy, sr, sg, sb float64) {
 	img, _, ok := a.frameImg(name)
 	if !ok {
 		return
@@ -233,5 +237,8 @@ func blitFrameTL(dst *ebiten.Image, a *atlas, name string, sx, sy float64) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(sx, sy)
 	op.Filter = ebiten.FilterNearest
+	if sr != 1 || sg != 1 || sb != 1 {
+		op.ColorScale.Scale(float32(sr), float32(sg), float32(sb), 1)
+	}
 	dst.DrawImage(img, op)
 }

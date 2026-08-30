@@ -15,15 +15,18 @@ import (
 const oneShotCap = 3
 
 type Audio struct {
-	mu      sync.Mutex
-	ctx     *ebitenaudio.Context
-	chase   *ebitenaudio.Player
-	shots   [oneShotCap]*ebitenaudio.Player
-	crunchB []byte
-	wreckB  []byte
-	peelB   []byte
-	burstB  []byte
-	ready   bool
+	mu        sync.Mutex
+	ctx       *ebitenaudio.Context
+	chase     *ebitenaudio.Player
+	chip      *ebitenaudio.Player
+	shots     [oneShotCap]*ebitenaudio.Player
+	crunchB   []byte
+	wreckB    []byte
+	peelB     []byte
+	burstB    []byte
+	tallyDuck bool
+	wreckDuck bool
+	ready     bool
 }
 
 func (a *Audio) ensure() {
@@ -59,6 +62,14 @@ func (a *Audio) ensure() {
 		p.SetVolume(0.35)
 		a.chase = p
 	}
+	if len(a.crunchB) > 0 {
+		chipSrc := ebitenaudio.NewInfiniteLoop(bytes.NewReader(a.crunchB), int64(len(a.crunchB)))
+		cp, err := a.ctx.NewPlayer(chipSrc)
+		if err == nil {
+			cp.SetVolume(0.40)
+			a.chip = cp
+		}
+	}
 }
 
 func (a *Audio) StartChase() {
@@ -68,8 +79,9 @@ func (a *Audio) StartChase() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.ensure()
+	a.wreckDuck = false
+	a.applyChaseVol()
 	if a.chase != nil {
-		a.chase.SetVolume(0.35)
 		_ = a.chase.Rewind()
 		a.chase.Play()
 	}
@@ -81,17 +93,63 @@ func (a *Audio) Duck(tally bool) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.tallyDuck = tally
+	a.applyChaseVol()
+}
+
+func (a *Audio) DuckWreck(active bool) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ensure()
+	a.wreckDuck = active
+	a.applyChaseVol()
+	a.setChip(active)
+}
+
+func (a *Audio) ChaseVolume() float64 {
+	if a == nil {
+		return 0
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.chase == nil {
+		return 0
+	}
+	return a.chase.Volume()
+}
+
+func (a *Audio) applyChaseVol() {
 	if a.chase == nil {
 		return
 	}
-	if tally {
+	switch {
+	case a.tallyDuck:
 		a.chase.SetVolume(0.12)
-	} else {
+	case a.wreckDuck:
+		a.chase.SetVolume(0.10)
+	default:
 		a.chase.SetVolume(0.35)
 	}
 }
 
-func (a *Audio) Crunch() { a.Wreck() }
+func (a *Audio) setChip(on bool) {
+	if a.chip == nil {
+		return
+	}
+	if on {
+		if !a.chip.IsPlaying() {
+			_ = a.chip.Rewind()
+			a.chip.Play()
+		}
+		return
+	}
+	a.chip.Pause()
+}
+
+func (a *Audio) Crunch() { a.play(func(x *Audio) []byte { return x.crunchB }) }
 
 func (a *Audio) Wreck() { a.play(func(x *Audio) []byte { return x.wreckB }) }
 
@@ -154,6 +212,10 @@ func (a *Audio) Stop() {
 	if a.chase != nil {
 		a.chase.Pause()
 	}
+	if a.chip != nil {
+		a.chip.Pause()
+	}
+	a.wreckDuck = false
 	for i, p := range a.shots {
 		if p != nil {
 			p.Pause()

@@ -284,7 +284,11 @@ func drawBuildings(dst *ebiten.Image, v View, a *atlas) {
 		default:
 			name = "building_intact"
 		}
-		stampAABB(dst, v, a, name, b.X, b.Y, b.W, b.H)
+		if b.State == lot.Cracked {
+			stampCrackedAABB(dst, v, a, name, b.X, b.Y, b.W, b.H)
+		} else {
+			stampAABB(dst, v, a, name, b.X, b.Y, b.W, b.H)
+		}
 		if b.Label != "" {
 			sx, sy := world(v, b.X, b.Y)
 			drawText(dst, b.Label, sx+4, sy+4, ColLabel)
@@ -299,6 +303,19 @@ func stampAABB(dst *ebiten.Image, v View, a *atlas, name string, x, y, w, h floa
 			blitFrameTL(dst, a, name, sx, sy)
 		}
 	}
+}
+
+func stampCrackedAABB(dst *ebiten.Image, v View, a *atlas, name string, x, y, w, h float64) {
+	const dim = 0.62
+	for oy := 0.0; oy < h; oy += float64(tile) {
+		for ox := 0.0; ox < w; ox += float64(tile) {
+			sx, sy := world(v, x+ox, y+oy)
+			blitFrameTLScale(dst, a, name, sx, sy, dim, dim, dim)
+		}
+	}
+	sx, sy := world(v, x, y)
+	vector.StrokeLine(dst, float32(sx), float32(sy), float32(sx+w), float32(sy+h), 1, ColCrack, false)
+	vector.StrokeLine(dst, float32(sx+w), float32(sy), float32(sx), float32(sy+h), 1, ColCrack, false)
 }
 
 func drawBlockers(dst *ebiten.Image, v View, a *atlas) {

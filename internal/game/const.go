@@ -34,7 +34,7 @@ const (
 	HeatCoolIdle    = 8.0
 
 	WreckHPPerTile = 2.0  // each 16×16 of a building
-	WreckRateDown  = 14.0 // HP/s while blade-down overlapping
+	WreckRateDown  = 26.0 // HP/s blade-down; two heat-80 pulses finish sheriff, first crosses Cracked (impl §8 wreck / stall cook)
 	WreckRateUp    = 1.5  // glance
 
 	CruiserSpeed  = 95.0
