@@ -85,18 +85,37 @@ func stampSprites() error {
 		paintSpark(dst, sparkX0+i*sparkSize, sparkY, i)
 	}
 
-	out, err := os.Create(spritesPNG)
+	pngTmp, err := os.CreateTemp(filepath.Dir(spritesPNG), ".sprites-*.png")
 	if err != nil {
 		return err
 	}
-	if err := png.Encode(out, dst); err != nil {
-		out.Close()
+	pngName := pngTmp.Name()
+	defer os.Remove(pngName)
+	if err := png.Encode(pngTmp, dst); err != nil {
+		pngTmp.Close()
 		return err
 	}
-	if err := out.Close(); err != nil {
+	if err := pngTmp.Close(); err != nil {
 		return err
 	}
-	return patchJSON()
+
+	jsonTmp, err := os.CreateTemp(filepath.Dir(spritesJSON), ".sprites-*.json")
+	if err != nil {
+		return err
+	}
+	jsonName := jsonTmp.Name()
+	defer os.Remove(jsonName)
+	if err := patchJSON(jsonName); err != nil {
+		jsonTmp.Close()
+		return err
+	}
+	if err := jsonTmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(pngName, spritesPNG); err != nil {
+		return err
+	}
+	return os.Rename(jsonName, spritesJSON)
 }
 
 func paintBoom(img *image.NRGBA, x0, y0, frame int) {
@@ -254,7 +273,7 @@ func dither(x, y int) bool {
 	return (x+y*3)&1 == 0
 }
 
-func patchJSON() error {
+func patchJSON(path string) error {
 	b, err := os.ReadFile(spritesJSON)
 	if err != nil {
 		return err
@@ -269,7 +288,7 @@ func patchJSON() error {
 		doc["frames"] = frames
 	}
 	if _, ok := frames["boom_00"]; ok {
-		return nil
+		return os.WriteFile(path, b, 0o644)
 	}
 	for i := 0; i < 6; i++ {
 		name := fmt.Sprintf("boom_%02d", i)
@@ -291,7 +310,7 @@ func patchJSON() error {
 		return err
 	}
 	out = append(out, '\n')
-	return os.WriteFile(spritesJSON, out, 0o644)
+	return os.WriteFile(path, out, 0o644)
 }
 
 func wreckPCM() []int16 {
