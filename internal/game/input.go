@@ -39,6 +39,9 @@ func (g *Game) probe() Probe {
 }
 
 func (g *Game) readInput() Input {
+	if g.harness != nil {
+		return g.harness.in
+	}
 	var in Input
 	left := ebiten.IsKeyPressed(ebiten.KeyA)
 	right := ebiten.IsKeyPressed(ebiten.KeyD)

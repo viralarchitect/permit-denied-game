@@ -24,17 +24,8 @@ const (
 )
 
 var (
-	hudFace  = text.NewGoXFace(basicfont.Face7x13)
-	whiteImg *ebiten.Image
+	hudFace = text.NewGoXFace(basicfont.Face7x13)
 )
-
-func white() *ebiten.Image {
-	if whiteImg == nil {
-		whiteImg = ebiten.NewImage(1, 1)
-		whiteImg.Fill(color.White)
-	}
-	return whiteImg
-}
 
 type View struct {
 	CamX, CamY, ShakeX, ShakeY float64
@@ -74,18 +65,22 @@ type Tally struct {
 }
 
 func DrawWorld(dst *ebiten.Image, v View) {
+	a, err := ensureAtlas()
+	if err != nil {
+		panic(err)
+	}
 	fill(dst, 0, 0, screenW, screenH, ColBG)
-	drawGround(dst, v)
-	drawConcrete(dst, v)
+	drawGround(dst, v, a)
+	drawConcrete(dst, v, a)
 	drawBuildingShadows(dst, v)
-	drawBuildings(dst, v)
-	drawBlockers(dst, v)
-	drawPeds(dst, v)
-	drawCruisers(dst, v)
-	drawExcavator(dst, v)
-	drawDozer(dst, v)
-	drawChopper(dst, v)
-	drawDollars(dst, v)
+	drawBuildings(dst, v, a)
+	drawBlockers(dst, v, a)
+	drawPeds(dst, v, a)
+	drawCruisers(dst, v, a)
+	drawExcavator(dst, v, a)
+	drawDozer(dst, v, a)
+	drawChopper(dst, v, a)
+	drawDollars(dst, v, a)
 	drawBanner(dst, v)
 }
 
@@ -124,19 +119,6 @@ func DrawHUD(dst *ebiten.Image, v View) {
 	}
 }
 
-func hudMult(targets int) float64 {
-	switch {
-	case targets <= 0:
-		return 1.0
-	case targets == 1:
-		return 1.25
-	case targets == 2:
-		return 1.6
-	default:
-		return 2.0
-	}
-}
-
 func multLabel(targets int) string {
 	switch targets {
 	case 1:
@@ -149,13 +131,15 @@ func multLabel(targets int) string {
 }
 
 func DrawTitle(dst *ebiten.Image) {
+	a, err := ensureAtlas()
+	if err != nil {
+		panic(err)
+	}
 	fill(dst, 0, 0, screenW, screenH, ColBG)
-	// dirt strip suggestion
 	fill(dst, 0, 140, screenW, 84, ColDirt)
 	fill(dst, 120, 0, 80, screenH, ColAsphalt)
 
-	drawRotated(dst, screenW/2, 118, 18, 28, 0.15, ColPaint)
-	drawRotated(dst, screenW/2, 118-16, 32, 8, 0.15, ColBlade)
+	blitFrame(dst, a, "dozer_up_00", screenW/2, 118)
 
 	drawTextScaled(dst, "PERMIT DENIED", 52, 36, 2, ColPaint)
 	drawText(dst, "THE COUNTY SAID NO.", 86, 72, ColHUD)
@@ -200,7 +184,7 @@ func DrawTally(dst *ebiten.Image, t Tally) {
 	}
 }
 
-func drawGround(dst *ebiten.Image, v View) {
+func drawGround(dst *ebiten.Image, v View, a *atlas) {
 	x0 := int(v.CamX)/tile - 1
 	y0 := int(v.CamY)/tile - 1
 	x1 := int(v.CamX+screenW)/tile + 2
@@ -222,48 +206,38 @@ func drawGround(dst *ebiten.Image, v View) {
 			wx := float64(tx * tile)
 			wy := float64(ty * tile)
 			sx, sy := world(v, wx, wy)
-			n := tileHash(tx, ty)
-			dirt := ColDirt
-			if n&3 == 0 {
-				dirt = shade(dirt, -8)
-			} else if n&3 == 1 {
-				dirt = shade(dirt, 8)
+			blitTile(dst, a, a.ground[ty][tx], sx, sy)
+			decal := a.decal[ty][tx]
+			if decal != 0 {
+				blitTile(dst, a, decal, sx, sy)
 			}
-			col := dirt
-			// drag asphalt x=240..400
-			if wx >= 240 && wx < 400 {
-				col = ColAsphalt
-				if n&7 == 0 {
-					col = shade(col, 10)
-				}
-			}
-			// plant pad 200,48,240,200
-			if wx >= 200 && wx < 440 && wy >= 48 && wy < 248 {
-				col = ColPad
-			}
-			fill(dst, sx, sy, tile, tile, col)
 		}
-	}
-	// rail spur y=200..216, x=400..640
-	rx, ry := world(v, 400, 200)
-	fill(dst, rx, ry, 240, 16, ColRail)
-	for i := 0; i < 15; i++ {
-		tx, ty := world(v, 400+float64(i*16), 200)
-		fill(dst, tx, ty, 4, 16, ColTie)
 	}
 }
 
-func drawConcrete(dst *ebiten.Image, v View) {
+func drawConcrete(dst *ebiten.Image, v View, a *atlas) {
+	// Wet concrete (id 14) is already on the decal layer.
+	// When a patch sets, overwrite those cells with concrete_set (id 15).
 	for _, b := range v.Blockers {
-		if b.Kind != threats.BlockerConcrete || !b.Alive {
+		if b.Kind != threats.BlockerConcrete || !b.Alive || !b.Set {
 			continue
 		}
-		sx, sy := world(v, b.X, b.Y)
-		c := ColWet
-		if b.Set {
-			c = ColSet
+		tx0 := int(b.X) / tile
+		ty0 := int(b.Y) / tile
+		tx1 := int(b.X+b.W-1)/tile + 1
+		ty1 := int(b.Y+b.H-1)/tile + 1
+		for ty := ty0; ty < ty1; ty++ {
+			for tx := tx0; tx < tx1; tx++ {
+				if ty < 0 || ty >= len(a.decal) || tx < 0 || tx >= len(a.decal[ty]) {
+					continue
+				}
+				if a.decal[ty][tx] != tileWet {
+					continue
+				}
+				sx, sy := world(v, float64(tx*tile), float64(ty*tile))
+				blitTile(dst, a, tileSet, sx, sy)
+			}
 		}
-		fill(dst, sx, sy, b.W, b.H, c)
 	}
 }
 
@@ -274,77 +248,73 @@ func drawBuildingShadows(dst *ebiten.Image, v View) {
 	}
 }
 
-func drawBuildings(dst *ebiten.Image, v View) {
+func drawBuildings(dst *ebiten.Image, v View, a *atlas) {
 	for _, b := range v.Buildings {
-		sx, sy := world(v, b.X, b.Y)
+		name := "building_intact"
 		switch b.State {
 		case lot.Intact:
-			fill(dst, sx, sy, b.W, b.H, ColBuilding)
+			name = "building_intact"
 		case lot.Cracked:
-			fill(dst, sx, sy, b.W, b.H, shade(ColBuilding, -24))
-			vector.StrokeLine(dst, float32(sx+2), float32(sy+2), float32(sx+b.W-2), float32(sy+b.H-2), 1, ColCrack, false)
-			vector.StrokeLine(dst, float32(sx+b.W-2), float32(sy+2), float32(sx+2), float32(sy+b.H-2), 1, ColCrack, false)
+			name = "building_cracked"
 		case lot.InRubble:
-			fill(dst, sx, sy, b.W, b.H, ColRubble)
-			scatter(dst, v, b.X, b.Y, b.W, b.H)
+			name = "building_rubble"
+		default:
+			name = "building_intact"
 		}
+		stampAABB(dst, v, a, name, b.X, b.Y, b.W, b.H)
 		if b.Label != "" && b.State != lot.InRubble {
+			sx, sy := world(v, b.X, b.Y)
 			drawText(dst, b.Label, sx+4, sy+4, ColLabel)
 		}
 	}
 }
 
-func scatter(dst *ebiten.Image, v View, x, y, w, h float64) {
-	n := int(w*h) / 80
-	if n < 3 {
-		n = 3
-	}
-	if n > 12 {
-		n = 12
-	}
-	for i := 0; i < n; i++ {
-		hsh := tileHash(int(x)+i*13, int(y)+i*7)
-		ox := float64(hsh % uint32(w-4))
-		oy := float64((hsh >> 8) % uint32(h-4))
-		sx, sy := world(v, x+ox, y+oy)
-		fill(dst, sx, sy, 4, 3, shade(ColRubble, int(hsh%20)-10))
+func stampAABB(dst *ebiten.Image, v View, a *atlas, name string, x, y, w, h float64) {
+	for oy := 0.0; oy < h; oy += float64(tile) {
+		for ox := 0.0; ox < w; ox += float64(tile) {
+			sx, sy := world(v, x+ox, y+oy)
+			blitFrameTL(dst, a, name, sx, sy)
+		}
 	}
 }
 
-func drawBlockers(dst *ebiten.Image, v View) {
+func drawBlockers(dst *ebiten.Image, v View, a *atlas) {
 	for _, b := range v.Blockers {
 		if !b.Alive || b.Kind == threats.BlockerConcrete {
 			continue
 		}
-		sx, sy := world(v, b.X, b.Y)
 		switch b.Kind {
 		case threats.BlockerJersey:
-			fill(dst, sx, sy, b.W, b.H, ColJersey)
-			fill(dst, sx, sy, 4, b.H, ColPaint)
+			name := "jersey"
+			if v.YardDown || b.HP <= 1 {
+				name = "jersey_broken"
+			}
+			stampAABB(dst, v, a, name, b.X, b.Y, b.W, b.H)
 		case threats.BlockerDump:
-			fill(dst, sx, sy, b.W, b.H, ColDump)
-			fill(dst, sx+4, sy+2, b.W-8, 6, shade(ColDump, 20))
+			sx, sy := world(v, b.X+b.W/2, b.Y+b.H/2)
+			blitFrame(dst, a, "dump_00", sx, sy)
 		}
 	}
 }
 
-func drawPeds(dst *ebiten.Image, v View) {
+func drawPeds(dst *ebiten.Image, v View, a *atlas) {
 	for _, p := range v.Peds {
 		if !p.Alive {
 			continue
 		}
-		sx, sy := world(v, p.X-2, p.Y-3)
-		fill(dst, sx, sy, 4, 6, ColPed)
+		sx, sy := world(v, p.X, p.Y)
+		blitFrame(dst, a, "ped", sx, sy)
 	}
 }
 
-func drawCruisers(dst *ebiten.Image, v View) {
+func drawCruisers(dst *ebiten.Image, v View, a *atlas) {
 	for _, c := range v.Cruisers {
 		if !c.Alive {
 			continue
 		}
 		sx, sy := world(v, c.X, c.Y)
-		drawRotated(dst, sx, sy, 10, 16, c.Heading, ColCruiser)
+		name := fmt.Sprintf("cruiser_%02d", facingIndex(c.Heading))
+		blitFrame(dst, a, name, sx, sy)
 		on := v.Tick%20 < 10
 		if on {
 			fill(dst, sx-3, sy-6, 2, 2, ColSiren)
@@ -356,10 +326,9 @@ func drawCruisers(dst *ebiten.Image, v View) {
 	}
 }
 
-func drawExcavator(dst *ebiten.Image, v View) {
+func drawExcavator(dst *ebiten.Image, v View, a *atlas) {
 	ex := v.Excavator
 	if ex.Announced && !ex.Arrived {
-		// dust puff at yard
 		sx, sy := world(v, 448, 720)
 		fill(dst, sx+20, sy+40, 10, 6, shade(ColDirt, 20))
 		fill(dst, sx+36, sy+48, 14, 8, shade(ColDirt, 10))
@@ -368,7 +337,8 @@ func drawExcavator(dst *ebiten.Image, v View) {
 		return
 	}
 	sx, sy := world(v, ex.X, ex.Y)
-	drawRotated(dst, sx, sy, 20, 36, ex.Heading, ColEx)
+	name := fmt.Sprintf("excavator_%02d", evenFacing(ex.Heading))
+	blitFrame(dst, a, name, sx, sy)
 	ang := (ex.BoomPhase - 0.5) * 1.2
 	hdg := ex.Heading + ang
 	fx, fy := math.Sin(hdg), -math.Cos(hdg)
@@ -378,9 +348,15 @@ func drawExcavator(dst *ebiten.Image, v View) {
 	fill(dst, x1-3, y1-3, 6, 6, ColFrame)
 }
 
-func drawDozer(dst *ebiten.Image, v View) {
+func drawDozer(dst *ebiten.Image, v View, a *atlas) {
 	d := v.Dozer
 	sx, sy := world(v, d.X, d.Y)
+	stance := "up"
+	if d.BladeDown {
+		stance = "down"
+	}
+	name := fmt.Sprintf("dozer_%s_%02d", stance, facingIndex(d.Heading))
+
 	base := PlateColor(d.Plates)
 	t := d.Heat / 100
 	col := mix(base, ColHeat, t*0.85)
@@ -390,16 +366,24 @@ func drawDozer(dst *ebiten.Image, v View) {
 	if d.IFrames > 0 && v.Tick%4 < 2 {
 		col = mix(col, color.RGBA{0xFF, 0xFF, 0xFF, 0xFF}, 0.35)
 	}
-	// tracks
-	rx, ry := math.Cos(d.Heading), math.Sin(d.Heading)
-	drawRotated(dst, sx+rx*8, sy+ry*8, 5, 26, d.Heading, ColTrack)
-	drawRotated(dst, sx-rx*8, sy-ry*8, 5, 26, d.Heading, ColTrack)
-	drawRotated(dst, sx, sy, 16, 24, d.Heading, col)
-	bh := 6.0
-	if d.BladeDown {
-		bh = 10
+
+	img, f, ok := a.frameImg(name)
+	if !ok {
+		return
 	}
-	drawRotatedOffset(dst, sx, sy, 32, bh, d.Heading, 0, -18, ColBlade)
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(sx-f.AnchorX, sy-f.AnchorY)
+	op.Filter = ebiten.FilterNearest
+	// Remap paint-yellow atlas pixels toward plate/heat tint.
+	paint := ColPaint
+	op.ColorScale.Scale(
+		float32(col.R)/float32(paint.R),
+		float32(col.G)/float32(paint.G),
+		float32(col.B)/float32(paint.B),
+		1,
+	)
+	dst.DrawImage(img, op)
+
 	if d.Heat > 70 && v.Tick%12 < 6 {
 		fx, fy := math.Sin(d.Heading), -math.Cos(d.Heading)
 		px := sx - fy*6 - fx*4
@@ -411,30 +395,26 @@ func drawDozer(dst *ebiten.Image, v View) {
 	}
 }
 
-func drawChopper(dst *ebiten.Image, v View) {
+func drawChopper(dst *ebiten.Image, v View, a *atlas) {
 	c := v.Chopper
 	if !c.Active {
 		return
 	}
 	sx, sy := world(v, c.X, c.Y)
-	// spotlight under chopper sprite (order: spotlight then diamond)
 	vector.FillCircle(dst, float32(sx), float32(sy), float32(c.SpotR), ColSpot, true)
-	drawRotated(dst, sx, sy, 16, 10, 0, ColChopper)
-	spin := float64(v.Tick) * 0.7
-	vector.StrokeLine(dst,
-		float32(sx+math.Cos(spin)*10), float32(sy+math.Sin(spin)*10),
-		float32(sx-math.Cos(spin)*10), float32(sy-math.Sin(spin)*10),
-		1, ColHUD, false)
+	frame := (v.Tick / 2) % 4
+	blitFrame(dst, a, fmt.Sprintf("chopper_%d", frame), sx, sy)
 }
 
-func drawDollars(dst *ebiten.Image, v View) {
+func drawDollars(dst *ebiten.Image, v View, a *atlas) {
 	for _, d := range v.Dollars {
 		rise := (0.7 - d.Life) / 0.7 * 20
 		if rise < 0 {
 			rise = 0
 		}
 		sx, sy := world(v, d.X, d.Y-rise)
-		drawText(dst, fmt.Sprintf("+$%d", d.Amt), sx-12, sy-8, ColMoney)
+		blitFrame(dst, a, "dollar", sx, sy)
+		drawText(dst, fmt.Sprintf("+$%d", d.Amt), sx-12, sy-12, ColMoney)
 	}
 }
 
@@ -447,22 +427,26 @@ func drawBanner(dst *ebiten.Image, v View) {
 }
 
 func drawPips(dst *ebiten.Image, v View) {
+	a, err := ensureAtlas()
+	if err != nil {
+		return
+	}
 	for _, b := range v.Buildings {
 		if b.ID == lot.TargetNone || b.State == lot.InRubble {
 			continue
 		}
 		cx, cy := b.Center()
-		var col color.RGBA
+		name := "pip_cyan"
 		switch b.ID {
 		case lot.TargetSheriff:
-			col = ColAmber
+			name = "pip_amber"
 		case lot.TargetYard:
-			col = ColRust
-		default:
-			col = ColPlantPip
+			name = "pip_rust"
+		case lot.TargetPlant:
+			name = "pip_cyan"
 		}
 		px, py := rimPoint(v, cx, cy)
-		fill(dst, px-2, py-2, 4, 4, col)
+		blitFrame(dst, a, name, px, py)
 	}
 }
 
@@ -495,29 +479,6 @@ func fill(dst *ebiten.Image, x, y, w, h float64, c color.Color) {
 	vector.FillRect(dst, float32(x), float32(y), float32(w), float32(h), c, false)
 }
 
-func drawRotated(dst *ebiten.Image, cx, cy, w, h, heading float64, c color.Color) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(w, h)
-	op.GeoM.Translate(-w/2, -h/2)
-	op.GeoM.Rotate(heading)
-	op.GeoM.Translate(cx, cy)
-	op.Filter = ebiten.FilterNearest
-	op.ColorScale.ScaleWithColor(c)
-	dst.DrawImage(white(), op)
-}
-
-func drawRotatedOffset(dst *ebiten.Image, cx, cy, w, h, heading, ox, oy float64, c color.Color) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(w, h)
-	op.GeoM.Translate(-w/2, -h/2)
-	op.GeoM.Translate(ox, oy)
-	op.GeoM.Rotate(heading)
-	op.GeoM.Translate(cx, cy)
-	op.Filter = ebiten.FilterNearest
-	op.ColorScale.ScaleWithColor(c)
-	dst.DrawImage(white(), op)
-}
-
 func drawText(dst *ebiten.Image, s string, x, y float64, c color.Color) {
 	op := &text.DrawOptions{}
 	op.GeoM.Translate(x, y)
@@ -533,13 +494,6 @@ func drawTextScaled(dst *ebiten.Image, s string, x, y, scale float64, c color.Co
 	op.ColorScale.ScaleWithColor(c)
 	op.Filter = ebiten.FilterNearest
 	text.Draw(dst, s, hudFace, op)
-}
-
-func tileHash(tx, ty int) uint32 {
-	n := uint32(tx)*374761393 ^ uint32(ty)*668265263
-	n = (n << 13) ^ n
-	n *= 1274126177
-	return n
 }
 
 func shade(c color.RGBA, d int) color.RGBA {

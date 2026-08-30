@@ -17,3 +17,7 @@ Thumbs.db
 
 # Cursor hook runtime
 .cursor/hooks/state/
+
+# Verification proof artifacts (keep local; cleanup must not delete them)
+.cursor/skills/verify-permitdenied/artifacts/
+.cursor/skills/verify-permitdenied/bin/

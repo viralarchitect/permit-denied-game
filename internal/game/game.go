@@ -2,7 +2,6 @@ package game
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"permitdenied/internal/audio"
 	"permitdenied/internal/dozer"
 	"permitdenied/internal/fx"
@@ -45,6 +44,8 @@ type Game struct {
 	beat struct {
 		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool
 	}
+
+	harness *harnessFrame
 }
 
 func New() *Game {
@@ -62,17 +63,17 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 func (g *Game) Update() error {
 	in := g.readInput()
-	if inpututil.IsKeyJustPressed(ebiten.KeyF2) {
+	if g.keyJust(ebiten.KeyF2) {
 		g.debug = !g.debug
 	}
 	switch g.scene {
 	case SceneTitle:
-		if in.BladeToggle || inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		if in.BladeToggle || g.keyJust(ebiten.KeyEnter) {
 			g.startRun()
 			g.audio.StartChase()
 		}
 	case ScenePlay:
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		if g.keyJust(ebiten.KeyEscape) {
 			g.scene = SceneTitle
 			g.audio.Stop()
 			return nil
@@ -87,7 +88,7 @@ func (g *Game) Update() error {
 	case SceneTally:
 		g.fx.TallyT += Dt
 		g.audio.Duck(true)
-		if in.BladeToggle || inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		if in.BladeToggle || g.keyJust(ebiten.KeyEnter) {
 			g.startRun()
 			g.audio.StartChase()
 			g.audio.Duck(false)
@@ -97,10 +98,10 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) debugCheats() {
-	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
+	if g.keyJust(ebiten.KeyF1) {
 		g.peel("debug")
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyF3) {
+	if g.keyJust(ebiten.KeyF3) {
 		g.run.Tick += 15 * TPS
 	}
 }
@@ -172,22 +173,6 @@ func (g *Game) startRun() {
 	g.beat = struct {
 		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool
 	}{}
-}
-
-func initialBlockers(dumpTrucks bool) []threats.Blocker {
-	b := []threats.Blocker{
-		threats.Jersey(400, 780, 48, 16, JerseyHP), // yard mouth choke
-		threats.Concrete(256, 1100, 80, 24),
-		threats.Concrete(280, 400, 80, 24),
-		threats.Concrete(260, 200, 96, 32), // plant approach
-	}
-	if dumpTrucks {
-		b = append(b,
-			threats.Dump(456, 840, 40, 24, DumpHP),
-			threats.Dump(520, 840, 40, 24, DumpHP),
-		)
-	}
-	return b
 }
 
 func spawnPeds() []threats.Ped {
