@@ -67,9 +67,10 @@ func (g *Game) stepPlay(in Input) {
 
 	// 8. Blade-down wreck.
 	if g.dozer.BladeDown {
+		g.glanceLatch = false
 		g.wreckWithBlade(bx, by, bw, bh)
 	} else {
-		// 9. Blade-up glance: body vs building.
+		g.jerseyLatch = map[int]struct{}{}
 		g.glanceBuildings()
 	}
 
@@ -236,8 +237,9 @@ func (g *Game) stepCruisers() {
 			c.Alive = false
 			g.run.VehicleCash += CruiserKillCash
 			g.fx.SpawnDollar(c.X, c.Y, CruiserKillCash, DollarLife)
+			g.fx.SpawnBoom(c.X, c.Y)
 			g.fx.Shake += ShakeWreck * 0.4
-			g.audio.Crunch()
+			g.audio.Burst()
 			continue
 		}
 		if !front && g.dozer.BladeDown == false && g.dozer.IFrames == 0 && g.run.CruiserPIT {
@@ -281,7 +283,10 @@ func (g *Game) stepExcavator(bx, by, bw, bh float64) {
 				g.dozer.Plates--
 				g.dozer.IFrames = IFramesBoom
 				g.fx.Shake += ShakePeel
-				g.audio.Crunch()
+				g.audio.Peel()
+				if g.dozer.Plates <= 0 {
+					g.fx.SpawnBoom(g.dozer.X, g.dozer.Y)
+				}
 			}
 		}
 	}
@@ -295,9 +300,10 @@ func (g *Game) stepExcavator(bx, by, bw, bh float64) {
 				ex.Alive = false
 				g.run.VehicleCash += ExcavatorKillCash
 				g.fx.SpawnDollar(ex.X, ex.Y, ExcavatorKillCash, DollarLife)
+				g.fx.SpawnBoom(ex.X, ex.Y)
 				g.fx.HitStop = HitStopTicks
 				g.fx.Shake += ShakePeel
-				g.audio.Crunch()
+				g.audio.Burst()
 			}
 		}
 	}

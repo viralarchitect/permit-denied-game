@@ -22,6 +22,7 @@ func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
 			g.destroyBuilding(b)
 		}
 	}
+	liveJersey := map[int]struct{}{}
 	for i := range g.blockers {
 		bl := &g.blockers[i]
 		if !bl.Alive || !bl.Solid {
@@ -30,15 +31,24 @@ func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
 		if !aabbOverlap(bx, by, bw, bh, bl.X, bl.Y, bl.W, bl.H) {
 			continue
 		}
+		if bl.Kind == threats.BlockerJersey {
+			liveJersey[i] = struct{}{}
+			if _, ok := g.jerseyLatch[i]; !ok {
+				g.fx.SpawnSpark(bl.X+bl.W/2, bl.Y+bl.H/2)
+			}
+		}
 		bl.HP -= WreckRateDown * Dt
 		if bl.HP <= 0 {
 			g.killBlocker(bl)
 		}
 	}
+	g.jerseyLatch = liveJersey
 }
 
 func (g *Game) glanceBuildings() {
 	glanced := false
+	hitAny := false
+	var hx, hy float64
 	for i := range g.lot.Buildings {
 		b := &g.lot.Buildings[i]
 		if b.State == lot.InRubble {
@@ -49,11 +59,19 @@ func (g *Game) glanceBuildings() {
 				g.dozer.Speed *= GlanceScale
 				glanced = true
 			}
+			if !hitAny {
+				hx, hy = b.Center()
+				hitAny = true
+			}
 			if b.ApplyDamage(WreckRateUp * Dt) {
 				g.destroyBuilding(b)
 			}
 		}
 	}
+	if hitAny && !g.glanceLatch {
+		g.fx.SpawnSpark(hx, hy)
+	}
+	g.glanceLatch = hitAny
 }
 
 func (g *Game) destroyBuilding(b *lot.Building) {
@@ -61,9 +79,10 @@ func (g *Game) destroyBuilding(b *lot.Building) {
 	g.run.StructCash += b.Value
 	cx, cy := b.Center()
 	g.fx.SpawnDollar(cx, cy, b.Value, DollarLife)
+	g.fx.SpawnBoom(cx, cy)
 	g.fx.HitStop = HitStopTicks
 	g.fx.Shake += ShakeWreck
-	g.audio.Crunch()
+	g.audio.Wreck()
 	if b.ID != lot.TargetNone {
 		g.fireBoon(b.ID)
 	}
@@ -75,10 +94,11 @@ func (g *Game) killBlocker(bl *threats.Blocker) {
 	g.lot.AddRubble(bl.X, bl.Y, bl.W, bl.H, RubbleInset)
 	g.fx.HitStop = HitStopTicks
 	g.fx.Shake += ShakeWreck * 0.6
-	g.audio.Crunch()
 	if bl.Kind == threats.BlockerDump {
 		g.run.VehicleCash += DumpCash
 		g.fx.SpawnDollar(bl.X+bl.W/2, bl.Y+bl.H/2, DumpCash, DollarLife)
+		g.fx.SpawnBoom(bl.X+bl.W/2, bl.Y+bl.H/2)
+		g.audio.Wreck()
 	}
 }
 
@@ -162,10 +182,14 @@ func (g *Game) peel(_ string) {
 	if g.dozer.Plates <= 0 {
 		return
 	}
+	last := g.dozer.Plates == 1
 	g.dozer.Plates--
 	g.dozer.IFrames = IFramesPeel
 	g.fx.Shake += ShakePeel
-	g.audio.Crunch()
+	g.audio.Peel()
+	if last {
+		g.fx.SpawnBoom(g.dozer.X, g.dozer.Y)
+	}
 }
 
 // checkDeath ends the run on thrown track or cooked engine.

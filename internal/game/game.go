@@ -46,6 +46,9 @@ type Game struct {
 	}
 
 	harness *harnessFrame
+
+	glanceLatch bool
+	jerseyLatch map[int]struct{}
 }
 
 func New() *Game {
@@ -125,6 +128,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			Chopper:     g.chopper,
 			Peds:        g.peds,
 			Dollars:     g.fx.Dollars,
+			Bursts:      g.fx.Bursts,
 			Banner:      g.fx.Banner,
 			BannerT:     g.fx.BannerT,
 			RunTick:     g.run.Tick,
@@ -173,6 +177,8 @@ func (g *Game) startRun() {
 	g.beat = struct {
 		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool
 	}{}
+	g.glanceLatch = false
+	g.jerseyLatch = map[int]struct{}{}
 }
 
 func spawnPeds() []threats.Ped {
