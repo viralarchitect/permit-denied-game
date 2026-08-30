@@ -80,6 +80,7 @@ func (a *Audio) StartChase() {
 	defer a.mu.Unlock()
 	a.ensure()
 	a.wreckDuck = false
+	a.setChip(false)
 	a.applyChaseVol()
 	if a.chase != nil {
 		_ = a.chase.Rewind()
