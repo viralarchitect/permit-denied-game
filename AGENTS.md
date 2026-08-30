@@ -3,7 +3,7 @@
 - Do not commit built binaries (`dist/` or `*.exe`); CI produces the Windows package.
 - Do not retune wet-concrete `Solid` or HP unless explicitly approved; leave the known spawn-vs-writer mismatch in place.
 - When asked to put changes on GitHub, include all remaining uncommitted work except secrets, binaries, and artifacts.
-- PRs auto-merge when the Windows package CI is green (`go test ./...` plus the GUI build). Do not merge by hand unless auto-merge is stuck.
+- PRs auto-merge when the Windows package CI is green (`go test ./...` plus the GUI build). Do not merge by hand unless auto-merge is stuck. Merged head branches are deleted on the remote.
 
 ## Learned Workspace Facts
 
