@@ -145,6 +145,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			Speed:       g.dozer.Speed,
 			Debug:       g.debug,
 			Time:        g.run.Time(),
+			HideStance:  g.scene == SceneTally,
 		}
 		render.DrawWorld(screen, v)
 		render.DrawHUD(screen, v)
