@@ -154,6 +154,12 @@ func (a *Audio) Stop() {
 	if a.chase != nil {
 		a.chase.Pause()
 	}
+	for i, p := range a.shots {
+		if p != nil {
+			p.Pause()
+			a.shots[i] = nil
+		}
+	}
 }
 
 func genChase(rate int) []byte {

@@ -23,3 +23,14 @@ func TestMissingWAVFailsOpen(t *testing.T) {
 		t.Fatal("missing file should return nil")
 	}
 }
+
+func TestStopClearsOneShots(t *testing.T) {
+	a := &Audio{}
+	a.Wreck()
+	a.Stop()
+	for i, p := range a.shots {
+		if p != nil {
+			t.Fatalf("shot %d still live after Stop", i)
+		}
+	}
+}
