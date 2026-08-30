@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -85,18 +86,21 @@ func stampSprites() error {
 		paintSpark(dst, sparkX0+i*sparkSize, sparkY, i)
 	}
 
-	out, err := os.Create(spritesPNG)
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, dst); err != nil {
+		return err
+	}
+	jsonOut, err := patchedJSON()
 	if err != nil {
 		return err
 	}
-	if err := png.Encode(out, dst); err != nil {
-		out.Close()
+	if err := writeReplace(spritesPNG, pngBuf.Bytes()); err != nil {
 		return err
 	}
-	if err := out.Close(); err != nil {
-		return err
+	if jsonOut == nil {
+		return nil
 	}
-	return patchJSON()
+	return writeReplace(spritesJSON, jsonOut)
 }
 
 func paintBoom(img *image.NRGBA, x0, y0, frame int) {
@@ -254,14 +258,14 @@ func dither(x, y int) bool {
 	return (x+y*3)&1 == 0
 }
 
-func patchJSON() error {
+func patchedJSON() ([]byte, error) {
 	b, err := os.ReadFile(spritesJSON)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(b, &doc); err != nil {
-		return err
+		return nil, err
 	}
 	frames, _ := doc["frames"].(map[string]any)
 	if frames == nil {
@@ -269,7 +273,7 @@ func patchJSON() error {
 		doc["frames"] = frames
 	}
 	if _, ok := frames["boom_00"]; ok {
-		return nil
+		return nil, nil
 	}
 	for i := 0; i < 6; i++ {
 		name := fmt.Sprintf("boom_%02d", i)
@@ -288,10 +292,44 @@ func patchJSON() error {
 	}
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
+func writeReplace(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
+	if err != nil {
 		return err
 	}
-	out = append(out, '\n')
-	return os.WriteFile(spritesJSON, out, 0o644)
+	name := tmp.Name()
+	cleanup := func() { _ = os.Remove(name) }
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(name, path); err == nil {
+		return nil
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Remove(path); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		cleanup()
+		return err
+	}
+	return nil
 }
 
 func wreckPCM() []int16 {
