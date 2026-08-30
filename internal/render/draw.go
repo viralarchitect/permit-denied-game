@@ -75,6 +75,7 @@ func DrawWorld(dst *ebiten.Image, v View) {
 	drawConcrete(dst, v, a)
 	drawBuildingShadows(dst, v)
 	drawBuildings(dst, v, a)
+	drawRubble(dst, v, a)
 	drawBlockers(dst, v, a)
 	drawPeds(dst, v, a)
 	drawCruisers(dst, v, a)
@@ -150,8 +151,13 @@ func DrawTitle(dst *ebiten.Image) {
 	drawText(dst, "PRESS SPACE", 112, 200, ColPaint)
 }
 
+const (
+	tallyStripY = 156
+	tallyStripH = 68
+)
+
 func DrawTally(dst *ebiten.Image, t Tally) {
-	fill(dst, 40, 28, 240, 168, ColPanel)
+	fill(dst, 0, tallyStripY, screenW, tallyStripH, ColPanel)
 	death := "COUNTY CLOCK"
 	switch t.Death {
 	case "cooked":
@@ -159,30 +165,31 @@ func DrawTally(dst *ebiten.Image, t Tally) {
 	case "track":
 		death = "TRACK THROWN"
 	}
-	drawText(dst, death, 86, 36, ColRust)
+	drawText(dst, death, 8, tallyStripY+2, ColRust)
 
-	y := 56.0
+	y := float64(tallyStripY + 16)
 	if t.T >= 0.2 {
-		drawText(dst, fmt.Sprintf("STRUCTURE  $%d", t.StructCash), 70, y, ColMoney)
+		drawText(dst, fmt.Sprintf("STRUCTURE  $%d", t.StructCash), 8, y, ColMoney)
 	}
-	y += 16
+	y += 14
 	if t.T >= 0.45 {
-		drawText(dst, fmt.Sprintf("VEHICLE    $%d", t.VehicleCash), 70, y, ColMoney)
+		drawText(dst, fmt.Sprintf("VEHICLE    $%d", t.VehicleCash), 8, y, ColMoney)
 	}
-	y += 16
+	y += 14
 	if t.T >= 0.7 {
-		drawText(dst, fmt.Sprintf("TIME       %d", int(t.Time)), 70, y, ColHUD)
+		drawText(dst, fmt.Sprintf("TIME       %d", int(t.Time)), 8, y, ColHUD)
 	}
-	y += 16
+	y += 14
 	if t.T >= 0.95 {
-		drawText(dst, fmt.Sprintf("TARGETS    %d ×%s", t.Targets, multLabel(t.Targets)), 70, y, ColPlantPip)
+		drawText(dst, fmt.Sprintf("TARGETS    %d ×%s", t.Targets, multLabel(t.Targets)), 8, y, ColPlantPip)
 	}
-	y += 20
+	y += 14
 	if t.T >= 1.2 {
-		drawText(dst, fmt.Sprintf("TOTAL      %d", t.Total), 70, y, ColPaint)
+		drawText(dst, fmt.Sprintf("TOTAL      %d", t.Total), 8, y, ColPaint)
 	}
 	if t.T >= 1.4 {
-		drawText(dst, "SPACE / TAP — AGAIN", 78, 176, ColHUD)
+		drawText(dst, "THE COUNTY SAID NO.", 148, float64(tallyStripY+2), ColHUD)
+		drawText(dst, "SPACE / TAP — AGAIN", 148, float64(tallyStripY+52), ColHUD)
 	}
 }
 
@@ -245,26 +252,36 @@ func drawConcrete(dst *ebiten.Image, v View, a *atlas) {
 
 func drawBuildingShadows(dst *ebiten.Image, v View) {
 	for _, b := range v.Buildings {
+		if b.State == lot.InRubble {
+			continue
+		}
 		sx, sy := world(v, b.X+2, b.Y+2)
 		fill(dst, sx, sy, b.W, b.H, ColShadow)
 	}
 }
 
+func drawRubble(dst *ebiten.Image, v View, a *atlas) {
+	for _, r := range v.Rubble {
+		stampAABB(dst, v, a, "building_rubble", r.X, r.Y, r.W, r.H)
+	}
+}
+
 func drawBuildings(dst *ebiten.Image, v View, a *atlas) {
 	for _, b := range v.Buildings {
+		if b.State == lot.InRubble {
+			continue
+		}
 		name := "building_intact"
 		switch b.State {
 		case lot.Intact:
 			name = "building_intact"
 		case lot.Cracked:
 			name = "building_cracked"
-		case lot.InRubble:
-			name = "building_rubble"
 		default:
 			name = "building_intact"
 		}
 		stampAABB(dst, v, a, name, b.X, b.Y, b.W, b.H)
-		if b.Label != "" && b.State != lot.InRubble {
+		if b.Label != "" {
 			sx, sy := world(v, b.X, b.Y)
 			drawText(dst, b.Label, sx+4, sy+4, ColLabel)
 		}
