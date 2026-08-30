@@ -41,6 +41,8 @@ CI (`.github/workflows/windows-package.yml`) builds a GUI exe on push/PR to `mai
 
 Use the PR template. Keep the diff on one problem. Link an issue when there is one.
 
+Same-repo PRs auto-merge with a merge commit once the **windows** CI job is green (`go test ./...` and the GUI build). Drafts stay open until they are marked ready.
+
 Before you ask for review:
 
 - `go test ./...` is green
