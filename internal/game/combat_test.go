@@ -225,3 +225,54 @@ func TestSheriffDownNoCruiserPeel(t *testing.T) {
 		t.Fatalf("plates %d -> %d after side overlap with PIT off; want no peel", plates, g.dozer.Plates)
 	}
 }
+
+// TestApplyConcreteLawCurrentWritersForceSolid locks the known spawn-vs-writer
+// lie, not the spec. Wet spawn is Solid:false (threats.Concrete). Both writers
+// currently force Solid:true and stamp HP. A later approved fix must change
+// these assertions on purpose. Do not "fix" applyConcreteLaw to match this.
+func TestApplyConcreteLawCurrentWritersForceSolid(t *testing.T) {
+	set := threats.Concrete(0, 0, 16, 16)
+	applyConcreteLaw(&set, true)
+	if !set.Set || !set.Solid || set.HP != ConcreteSetHP {
+		t.Fatalf("sets=true: Set=%v Solid=%v HP=%v want Set&&Solid&&HP==%v", set.Set, set.Solid, set.HP, ConcreteSetHP)
+	}
+
+	unset := threats.Concrete(0, 0, 16, 16)
+	applyConcreteLaw(&unset, false)
+	if unset.Set || !unset.Solid || unset.HP != ConcreteUnsetHP {
+		t.Fatalf("sets=false: Set=%v Solid=%v HP=%v want Set==false&&Solid==true&&HP==%v", unset.Set, unset.Solid, unset.HP, ConcreteUnsetHP)
+	}
+}
+
+// TestKillBlockerRubbleIsCollectSolid is show-off test 5's collision half:
+// after killBlocker, the new rubble AABB is in collectSolids. Existing
+// TestKillJerseyLeavesRubble / TestKillDumpLeavesRubble already assert
+// lot.Rubble + inset + circle-vs-pile; they do not call collectSolids.
+func TestKillBlockerRubbleIsCollectSolid(t *testing.T) {
+	g := New()
+	g.audio = nil
+	g.startRun()
+	var jersey *threats.Blocker
+	for i := range g.blockers {
+		b := &g.blockers[i]
+		if b.Kind == threats.BlockerJersey && b.X == 400 && b.Y == 780 {
+			jersey = b
+			break
+		}
+	}
+	if jersey == nil {
+		t.Fatal("missing yard-mouth jersey")
+	}
+	g.killBlocker(jersey)
+	r := g.lot.Rubble[len(g.lot.Rubble)-1]
+	found := false
+	for _, s := range g.collectSolids() {
+		if s.x == r.X && s.y == r.Y && s.w == r.W && s.h == r.H {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("rubble AABB %v,%v %vx%v missing from collectSolids", r.X, r.Y, r.W, r.H)
+	}
+}
