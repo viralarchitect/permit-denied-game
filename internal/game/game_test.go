@@ -93,6 +93,33 @@ func TestCowardVsTwoTargetScore(t *testing.T) {
 	}
 }
 
+func TestEndRunTallyDeathAndScore(t *testing.T) {
+	deaths := []string{"cooked", "track", "buzzer"}
+	for _, death := range deaths {
+		g := New()
+		g.Silence()
+		g.startRun()
+		g.endRun(death)
+		if g.scene != SceneTally {
+			t.Fatalf("death %s: scene=%v want SceneTally", death, g.scene)
+		}
+		if g.run.Death != death {
+			t.Fatalf("death %s: got %q", death, g.run.Death)
+		}
+	}
+	g := New()
+	g.Silence()
+	g.startRun()
+	g.run.StructCash = 100
+	g.run.VehicleCash = 20
+	g.run.TimeAlive = 210
+	zero := g.run.Final(Mult(0))
+	two := g.run.Final(Mult(2))
+	if zero == two {
+		t.Fatalf("Final(Mult(0))=%d == Final(Mult(2))=%d", zero, two)
+	}
+}
+
 func TestRightAtNorthIsEast(t *testing.T) {
 	rx, ry := Right(0)
 	if math.Abs(rx-1) > 1e-9 || math.Abs(ry) > 1e-9 {
