@@ -9,7 +9,7 @@ import (
 // Writes boon flags and world solidity when a target dies (dumps despawn,
 // jersey HP clamp, concrete HP/solid). Beat reads those flags; combat writes them.
 
-func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
+func (g *Game) wreckWithBlade(bx, by, bw, bh float64) (eating bool) {
 	for i := range g.lot.Buildings {
 		b := &g.lot.Buildings[i]
 		if b.State == lot.InRubble {
@@ -18,8 +18,16 @@ func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
 		if !aabbOverlap(bx, by, bw, bh, b.X, b.Y, b.W, b.H) {
 			continue
 		}
+		eating = true
+		band := chipBand(b.HP, b.MaxHP)
 		if b.ApplyDamage(WreckRateDown * Dt) {
 			g.destroyBuilding(b)
+			continue
+		}
+		if chipBand(b.HP, b.MaxHP) > band {
+			cx, cy := b.Center()
+			g.fx.SpawnSpark(cx, cy)
+			g.fx.Shake += ShakeWreck * 0.25
 		}
 	}
 	liveJersey := map[int]struct{}{}
@@ -31,6 +39,7 @@ func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
 		if !aabbOverlap(bx, by, bw, bh, bl.X, bl.Y, bl.W, bl.H) {
 			continue
 		}
+		eating = true
 		if bl.Kind == threats.BlockerJersey {
 			liveJersey[i] = struct{}{}
 			if _, ok := g.jerseyLatch[i]; !ok {
@@ -43,6 +52,18 @@ func (g *Game) wreckWithBlade(bx, by, bw, bh float64) {
 		}
 	}
 	g.jerseyLatch = liveJersey
+	return eating
+}
+
+func chipBand(hp, maxHP float64) int {
+	if maxHP <= 0 {
+		return 0
+	}
+	lost := maxHP - hp
+	if lost < 0 {
+		lost = 0
+	}
+	return int(lost / (maxHP * 0.1))
 }
 
 func (g *Game) glanceBuildings() {
