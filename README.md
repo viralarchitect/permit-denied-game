@@ -1,14 +1,14 @@
 # PERMIT DENIED
 
-One-lot top-down dozer gauntlet. You are slow, heavy, and punished for filling the street you still need.
+Top-down tank-steer dozer. You are slow, heavy, and punished for filling the street you still need. Flatten the county lot, then a town, a city, and the capitol tower. One life. The run ends when the penthouse is rubble, the tower drops, or the machine stops.
 
-Window title: **PERMIT DENIED**. Same lot every run. No meta, no second player, no campaign.
+Window title: **PERMIT DENIED**.
 
 ## Run
 
 Requires Go 1.24+ and Ebitengine v2.9.
 
-```bash
+```powershell
 go test ./...
 go run ./cmd/permitdenied
 ```
@@ -24,7 +24,7 @@ build.bat
 dist\permitdenied.exe
 ```
 
-**CI:** GitHub Actions (`.github/workflows/windows-package.yml`) builds a GUI exe (`-H windowsgui`), uploads it as the `permitdenied-windows-amd64` workflow artifact on push/PR, and attaches it to a GitHub Release when you push a `v*` tag (for example `v1.0.0`).
+**CI:** GitHub Actions (`.github/workflows/windows-package.yml`) builds a GUI exe (`-H windowsgui`), uploads `permitdenied-windows-amd64` on push/PR, and attaches it to a GitHub Release on `v*` tags.
 
 ## Keys
 
@@ -33,7 +33,7 @@ dist\permitdenied.exe
 | `A` / `D` | Tank-steer left / right (the machine’s left, not screen-left) |
 | `W` / `S` | Forward / reverse |
 | `Space` | Toggle blade |
-| `Enter` / `Space` | Start, or **again** on the tally |
+| `Enter` / `Space` | Start, close the assessment, file amendments |
 | `Esc` | Title |
 | `F1` | Debug: peel one plate |
 | `F2` | Debug overlay |
@@ -41,15 +41,31 @@ dist\permitdenied.exe
 
 Phone: left thumb is a tiller (desired heading), right hold is throttle (slide up = forward, down = reverse), right tap toggles the blade.
 
-## The strip
+## The run
 
-Spawn at the south gate, facing north. Named targets, marked with rim pips:
+**County** — spawn at the south gate, facing north. Named targets: **SHERIFF** (PIT revoked), **YARD** (dumps gone, jersey brittle), **PLANT** (mix never sets). Blade down wrecks. Heat cooks if you keep pushing. Clear all three to enter town.
 
-- **SHERIFF** (amber) — smash it and cruisers lose PIT
-- **YARD** (rust) — smash it and dumps despawn, jersey walls go brittle
-- **PLANT** (cyan) — smash it and concrete never sets
+**Town** — three streets, civic targets (courthouse / school / depot). Layout shuffles. Fire truck and roadblocks stall you.
 
-Blade down wrecks. Blade up glances and leaves your sides open. Heat cooks the engine if you keep pushing a wall or sit wedged. Four palette plates; the last peel throws a track.
+**City** — steel mid-rise, garage, bus barn, overpass. Steel wants a ripper, ball, or driver. Buses park in the way.
+
+**Capitol** — campus plus a stacked tower. Wreck floors into ramps and punch the **PENTHOUSE**, or drop the **CORE** and the tower falls with it. Either is a win.
+
+Die on any map (heat, thrown track, pin, bury, clock) and the assessment closes. Meta unlocks stay on disk; attachments do not.
+
+## Attachments and meta
+
+Pickups on later maps: ripper, wide blade, wrecking ball, pile driver, extra plate. Lost on death.
+
+Between runs, a list of up to eight filed amendments (engine, armor, starting tools, alt civic layout). Each one changes how a building falls or how you get stuck. Save file: `%AppData%\permitdenied\meta.json`.
+
+## Assessment
+
+Stop causes: `CLEARED` / `ENGINE COOKED` / `TRACK THROWN` / `PINNED` / `BURIED` / `COUNTY CLOCK`. Copy is a denied permit, not a trailer.
+
+## Tunables
+
+All numbers live in `internal/game/const.go` (speeds, heat, wreck rates, clocks, map sizes). County lot coordinates stay in `internal/lot/lot.go`.
 
 ## Show-off tests
 
@@ -67,10 +83,11 @@ Covered by `go test ./...`:
 - Spawn, A 0.5 s → heading west-of-north
 - Blade down, push sheriff → HP drops
 - `TestForwardVector` and `TestMultTable`
+- Wreck spawns rubble; blade-up stall pins; meta save/load; capitol core-drop and penthouse reach
 
 ## Contributing
 
-One lot. Same strip every run. See [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
+See [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
 
 - Issues: bug, playtest, or change forms in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/)
 - PRs: [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)

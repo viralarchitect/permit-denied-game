@@ -10,3 +10,5 @@
 - GitHub repo is `viralarchitect/permit-denied-game` with default branch `main`.
 - This worktree is an untrusted git directory; use a per-command `safe.directory` override (`C:/Users/viral/PERMIT-DENIED`) instead of changing git config.
 - Local `build.bat` writes a console `dist\permitdenied.exe`; CI builds with `-H windowsgui`, uploads artifact `permitdenied-windows-amd64`, and attaches the exe on `v*` tags.
+- `main` is ruleset-protected: no direct pushes; changes go through PRs.
+- GitHub API for this repo uses the `user-github-viralarchitect` MCP. Leave the one-token GitHub plugin disabled.
