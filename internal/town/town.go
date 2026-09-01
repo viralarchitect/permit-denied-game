@@ -28,7 +28,7 @@ func Template(alt bool) mapgen.Arena {
 		},
 	}
 	if alt {
-		a.Slots[0].X, a.Slots[0].Y = 800, 1000
+		a.Slots[0].X, a.Slots[0].Y = 160, 1000
 		a.Slots[1].X, a.Slots[1].Y = 160, 200
 		a.Slots[2].X, a.Slots[2].Y = 800, 200
 	}
