@@ -11,6 +11,8 @@ type Input struct {
 	Throttle    float64 // -1 reverse … +1 forward
 	Steer       float64 // -1 vehicle-left … +1 vehicle-right
 	BladeToggle bool    // edge, once per press
+	Confirm     bool    // Enter
+	Back        bool    // Esc
 }
 
 type Probe struct {
@@ -40,7 +42,10 @@ func (g *Game) probe() Probe {
 
 func (g *Game) readInput() Input {
 	if g.harness != nil {
-		return g.harness.in
+		in := g.harness.in
+		in.Confirm = in.Confirm || g.harness.keys.Enter
+		in.Back = in.Back || g.harness.keys.Escape
+		return in
 	}
 	var in Input
 	left := ebiten.IsKeyPressed(ebiten.KeyA)
@@ -62,7 +67,13 @@ func (g *Game) readInput() Input {
 	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
 		in.BladeToggle = true
 	}
-	if keys {
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		in.Confirm = true
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		in.Back = true
+	}
+	if keys || in.Confirm || in.Back {
 		return in
 	}
 	g.mergeTouch(&in)

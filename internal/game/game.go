@@ -2,10 +2,14 @@ package game
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"permitdenied/internal/attach"
 	"permitdenied/internal/audio"
+	"permitdenied/internal/capitol"
 	"permitdenied/internal/dozer"
 	"permitdenied/internal/fx"
 	"permitdenied/internal/lot"
+	"permitdenied/internal/mapgen"
+	"permitdenied/internal/meta"
 	"permitdenied/internal/render"
 	"permitdenied/internal/run"
 	"permitdenied/internal/threats"
@@ -15,8 +19,12 @@ type Scene int
 
 const (
 	SceneTitle Scene = iota
-	ScenePlay
+	ScenePlay        // county
+	SceneTown
+	SceneCity
+	SceneCapitol
 	SceneTally
+	SceneMeta
 )
 
 type Game struct {
@@ -31,6 +39,20 @@ type Game struct {
 	excavator threats.Excavator
 	chopper   threats.Chopper
 	peds      []threats.Ped
+	heavies   []threats.Heavy
+	pickups   []attach.Pickup
+	kit       attach.Kit
+	tower     capitol.Tower
+	streets   []mapgen.Street
+	progress  meta.Save
+	metaPath  string
+
+	mapW, mapH float64
+	clockSec   float64
+	procedural bool
+	stallTicks int
+	buryTicks  int
+	newUnlocks []string
 
 	outsideW, outsideH int
 	debug              bool
@@ -44,6 +66,9 @@ type Game struct {
 	beat struct {
 		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool
 	}
+	wave struct {
+		t30, t80, t140 bool
+	}
 
 	harness *harnessFrame
 
@@ -53,8 +78,11 @@ type Game struct {
 
 func New() *Game {
 	return &Game{
-		scene: SceneTitle,
-		audio: &audio.Audio{},
+		scene:    SceneTitle,
+		audio:    &audio.Audio{},
+		mapW:     LotW,
+		mapH:     LotH,
+		clockSec: RunSeconds,
 	}
 }
 
@@ -71,12 +99,12 @@ func (g *Game) Update() error {
 	}
 	switch g.scene {
 	case SceneTitle:
-		if in.BladeToggle || g.keyJust(ebiten.KeyEnter) {
+		if in.BladeToggle || in.Confirm {
 			g.startRun()
 			g.audio.StartChase()
 		}
-	case ScenePlay:
-		if g.keyJust(ebiten.KeyEscape) {
+	case ScenePlay, SceneTown, SceneCity, SceneCapitol:
+		if in.Back {
 			g.scene = SceneTitle
 			g.audio.Stop()
 			return nil
@@ -91,10 +119,15 @@ func (g *Game) Update() error {
 	case SceneTally:
 		g.fx.TallyT += Dt
 		g.audio.Duck(true)
-		if in.BladeToggle || g.keyJust(ebiten.KeyEnter) {
-			g.startRun()
-			g.audio.StartChase()
+		if in.BladeToggle || in.Confirm {
+			g.leaveResult()
 			g.audio.Duck(false)
+		}
+	case SceneMeta:
+		if in.BladeToggle || in.Confirm || in.Back {
+			g.newUnlocks = nil
+			g.scene = SceneTitle
+			g.audio.Stop()
 		}
 	}
 	return nil
@@ -112,10 +145,16 @@ func (g *Game) debugCheats() {
 func (g *Game) Draw(screen *ebiten.Image) {
 	switch g.scene {
 	case SceneTitle:
-		render.DrawTitle(screen)
-	case ScenePlay, SceneTally:
+		render.DrawTitle(screen, g.progress.BestCash, g.progress.HighestTier)
+	case SceneMeta:
+		render.DrawMeta(screen, g.progress, g.newUnlocks)
+	case ScenePlay, SceneTown, SceneCity, SceneCapitol, SceneTally:
 		camX, camY := g.camera()
 		sx, sy := g.fx.Offsets(g.run.Tick)
+		down, total := g.lot.NamedDown()
+		if g.scene == ScenePlay || (g.scene == SceneTally && g.run.Tier == 0) {
+			down, total = g.run.Targets, 3
+		}
 		v := render.View{
 			CamX: camX, CamY: camY, ShakeX: sx, ShakeY: sy,
 			Tick:        g.run.Tick,
@@ -124,6 +163,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			Rubble:      g.lot.Rubble,
 			Cruisers:    g.cruisers,
 			Blockers:    g.blockers,
+			Heavies:     g.heavies,
+			Pickups:     g.pickups,
+			Streets:     streetsAsRects(g.streets),
 			Excavator:   g.excavator,
 			Chopper:     g.chopper,
 			Peds:        g.peds,
@@ -135,6 +177,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			StructCash:  g.run.StructCash,
 			VehicleCash: g.run.VehicleCash,
 			Targets:     g.run.Targets,
+			NamedDown:   down,
+			NamedTotal:  total,
 			PIT:         g.run.CruiserPIT,
 			Dump:        g.run.DumpTrucks,
 			Set:         g.run.ConcreteSets,
@@ -146,6 +190,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			Debug:       g.debug,
 			Time:        g.run.Time(),
 			HideStance:  g.scene == SceneTally,
+			MapW:        g.worldW(),
+			MapH:        g.worldH(),
+			Procedural:  g.procedural,
+			Tier:        g.run.Tier,
+			KitCount:    g.kit.Count(),
 		}
 		render.DrawWorld(screen, v)
 		render.DrawHUD(screen, v)
@@ -164,22 +213,25 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 }
 
+func streetsAsRects(in []mapgen.Street) []render.Rect {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]render.Rect, len(in))
+	for i, s := range in {
+		out[i] = render.Rect{X: s.X, Y: s.Y, W: s.W, H: s.H}
+	}
+	return out
+}
+
 func (g *Game) startRun() {
-	g.scene = ScenePlay
+	g.newUnlocks = nil
 	g.run = run.New()
+	g.run.Seed = g.freshSeed()
 	g.dozer = dozer.Spawn(SpawnX, SpawnY)
-	g.lot = lot.New(WreckHPPerTile)
 	g.fx = fx.FX{}
-	g.cruisers = nil
-	g.blockers = initialBlockers(true)
-	g.excavator = threats.Excavator{}
-	g.chopper = threats.Chopper{X: 320, Y: 40, SpotR: ChopperSpotR}
-	g.peds = spawnPeds()
-	g.beat = struct {
-		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool
-	}{}
-	g.glanceLatch = false
-	g.jerseyLatch = map[int]struct{}{}
+	g.applyStartKit()
+	g.loadCounty()
 }
 
 func spawnPeds() []threats.Ped {

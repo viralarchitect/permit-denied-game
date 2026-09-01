@@ -96,7 +96,7 @@ func TestDrawWorldSmoke(t *testing.T) {
 		Dozer:     d,
 		Buildings: l.Buildings,
 	})
-	DrawTitle(dst)
+	DrawTitle(dst, 0, 0)
 }
 
 func TestDrawBurstMissingFrameIsSilent(t *testing.T) {

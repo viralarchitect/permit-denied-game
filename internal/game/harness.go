@@ -112,8 +112,16 @@ func (g *Game) sceneName() string {
 		return "title"
 	case ScenePlay:
 		return "play"
+	case SceneTown:
+		return "town"
+	case SceneCity:
+		return "city"
+	case SceneCapitol:
+		return "capitol"
 	case SceneTally:
 		return "tally"
+	case SceneMeta:
+		return "meta"
 	default:
 		return "unknown"
 	}

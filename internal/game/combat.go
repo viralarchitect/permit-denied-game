@@ -1,6 +1,7 @@
 package game
 
 import (
+	"permitdenied/internal/capitol"
 	"permitdenied/internal/lot"
 	"permitdenied/internal/threats"
 )
@@ -20,7 +21,7 @@ func (g *Game) wreckWithBlade(bx, by, bw, bh float64) (eating bool) {
 		}
 		eating = true
 		band := chipBand(b.HP, b.MaxHP)
-		if b.ApplyDamage(WreckRateDown * Dt) {
+		if b.ApplyDamage(WreckRateDown * wreckMulFor(g, *b) * Dt) {
 			g.destroyBuilding(b)
 			continue
 		}
@@ -96,7 +97,13 @@ func (g *Game) glanceBuildings() {
 }
 
 func (g *Game) destroyBuilding(b *lot.Building) {
-	g.lot.AddRubble(b.X, b.Y, b.W, b.H, RubbleInset)
+	b.HP = 0
+	b.State = lot.InRubble
+	if capitol.IsRampRole(b.Role) {
+		g.lot.AddRamp(b.X, b.Y, b.W, b.H, RubbleInset)
+	} else {
+		g.lot.AddRubble(b.X, b.Y, b.W, b.H, RubbleInset)
+	}
 	g.run.StructCash += b.Value
 	cx, cy := b.Center()
 	g.fx.SpawnDollar(cx, cy, b.Value, DollarLife)
@@ -106,6 +113,10 @@ func (g *Game) destroyBuilding(b *lot.Building) {
 	g.audio.Wreck()
 	if b.ID != lot.TargetNone {
 		g.fireBoon(b.ID)
+	}
+	if g.scene != ScenePlay {
+		down, _ := g.lot.NamedDown()
+		g.run.Targets = down
 	}
 }
 
@@ -186,11 +197,17 @@ func applyConcreteLaw(b *threats.Blocker, sets bool) {
 
 func (g *Game) stepHeat(stalled, overlapping, bladeHitSolid, deepRubble bool) {
 	h := g.dozer.Heat
+	cook := 1.0
+	if g.progress.ArmorTier >= 2 {
+		cook = MetaArmorCook
+	}
 	switch {
-	case stalled:
-		h += HeatCookStall * Dt
+	case stalled && g.dozer.BladeDown:
+		h += HeatCookStall * Dt * cook
+	case stalled && !g.dozer.BladeDown:
+		h -= HeatCoolIdle * Dt
 	case g.dozer.BladeDown && (bladeHitSolid || deepRubble):
-		h += HeatCookPush * Dt
+		h += HeatCookPush * Dt * cook
 	case !g.dozer.BladeDown && !overlapping:
 		h -= HeatCoolAsphalt * Dt
 	default:

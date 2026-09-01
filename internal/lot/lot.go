@@ -42,13 +42,35 @@ func (l *Lot) BuildingByID(id TargetID) *Building {
 }
 
 func (l *Lot) AddRubble(x, y, w, h, inset float64) {
+	l.addPile(x, y, w, h, inset, false)
+}
+
+func (l *Lot) AddRamp(x, y, w, h, inset float64) {
+	l.addPile(x, y, w, h, inset, true)
+}
+
+func (l *Lot) addPile(x, y, w, h, inset float64, ramp bool) {
 	if w > inset*2 && h > inset*2 {
 		x += inset
 		y += inset
 		w -= inset * 2
 		h -= inset * 2
 	}
-	l.Rubble = append(l.Rubble, Rubble{X: x, Y: y, W: w, H: h})
+	l.Rubble = append(l.Rubble, Rubble{X: x, Y: y, W: w, H: h, Mass: w * h, Ramp: ramp})
+}
+
+func (l *Lot) NamedDown() (down, total int) {
+	for i := range l.Buildings {
+		b := l.Buildings[i]
+		if b.Label == "" || b.Role == RoleMundane {
+			continue
+		}
+		total++
+		if b.State == InRubble {
+			down++
+		}
+	}
+	return down, total
 }
 
 func (l *Lot) RubbleBlocks(x, y, w, h float64) bool {
