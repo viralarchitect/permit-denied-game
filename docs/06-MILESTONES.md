@@ -1,4 +1,3 @@
-```
 # Milestones
 
 Do not start N+1 until N is shippable-fun.
