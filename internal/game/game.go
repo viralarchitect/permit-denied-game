@@ -46,6 +46,7 @@ type Game struct {
 	streets   []mapgen.Street
 	progress  meta.Save
 	metaPath  string
+	progressLoadFailed bool
 
 	mapW, mapH float64
 	clockSec   float64
@@ -105,6 +106,7 @@ func (g *Game) Update() error {
 		}
 	case ScenePlay, SceneTown, SceneCity, SceneCapitol:
 		if in.Back {
+			g.persistProgress()
 			g.scene = SceneTitle
 			g.audio.Stop()
 			return nil

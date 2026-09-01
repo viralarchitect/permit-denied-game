@@ -1,6 +1,9 @@
 package game
 
 import (
+	"errors"
+	"log"
+	"os"
 	"time"
 
 	"permitdenied/internal/attach"
@@ -50,17 +53,27 @@ func (g *Game) buzzerTick() int {
 func (g *Game) LoadProgress() {
 	s, err := meta.Load(meta.DefaultPath())
 	if err != nil {
+		log.Printf("load progress: %v", err)
+		if !errors.Is(err, os.ErrNotExist) {
+			g.progressLoadFailed = true
+		}
 		return
 	}
 	g.progress = s
 }
 
 func (g *Game) persistProgress() {
+	if g.progressLoadFailed {
+		log.Printf("save progress: skipped after load failure")
+		return
+	}
 	path := g.metaPath
 	if path == "" {
 		path = meta.DefaultPath()
 	}
-	_ = meta.SaveFile(path, g.progress)
+	if err := meta.SaveFile(path, g.progress); err != nil {
+		log.Printf("save progress: %v", err)
+	}
 }
 
 func (g *Game) applyStartKit() {
@@ -81,6 +94,7 @@ func (g *Game) applyStartKit() {
 
 func (g *Game) loadCounty() {
 	g.scene = ScenePlay
+	g.progress.NoteTier(1)
 	g.run.Tier = 0
 	g.mapW, g.mapH = LotW, LotH
 	g.clockSec = RunSeconds
@@ -274,9 +288,6 @@ func (g *Game) leaveResult() {
 	g.progress.NoteCash(total)
 	if g.run.Death == "cleared" {
 		g.progress.NoteTier(4)
-		if id := g.progress.GrantNext(); id != "" {
-			g.newUnlocks = append(g.newUnlocks, id)
-		}
 	}
 	g.persistProgress()
 	if len(g.newUnlocks) > 0 {
