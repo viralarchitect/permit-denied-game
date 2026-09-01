@@ -9,9 +9,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"golang.org/x/image/font/basicfont"
+	"permitdenied/internal/attach"
 	"permitdenied/internal/dozer"
 	"permitdenied/internal/fx"
 	"permitdenied/internal/lot"
+	"permitdenied/internal/meta"
 	"permitdenied/internal/threats"
 )
 
@@ -27,6 +29,10 @@ var (
 	hudFace = text.NewGoXFace(basicfont.Face7x13)
 )
 
+type Rect struct {
+	X, Y, W, H float64
+}
+
 type View struct {
 	CamX, CamY, ShakeX, ShakeY float64
 	Tick                       int
@@ -35,6 +41,9 @@ type View struct {
 	Rubble                     []lot.Rubble
 	Cruisers                   []threats.Cruiser
 	Blockers                   []threats.Blocker
+	Heavies                    []threats.Heavy
+	Pickups                    []attach.Pickup
+	Streets                    []Rect
 	Excavator                  threats.Excavator
 	Chopper                    threats.Chopper
 	Peds                       []threats.Ped
@@ -45,6 +54,7 @@ type View struct {
 	RunTick                    int
 	StructCash, VehicleCash    int
 	Targets                    int
+	NamedDown, NamedTotal      int
 	PIT, Dump, Set, YardDown   bool
 	Heat                       float64
 	Plates                     int
@@ -53,6 +63,10 @@ type View struct {
 	Debug                      bool
 	Time                       float64
 	HideStance                 bool
+	MapW, MapH                 float64
+	Procedural                 bool
+	Tier                       int
+	KitCount                   int
 }
 
 type Tally struct {
@@ -78,6 +92,8 @@ func DrawWorld(dst *ebiten.Image, v View) {
 	drawBuildings(dst, v, a)
 	drawRubble(dst, v, a)
 	drawBlockers(dst, v, a)
+	drawHeavies(dst, v)
+	drawPickups(dst, v)
 	drawPeds(dst, v, a)
 	drawCruisers(dst, v, a)
 	drawExcavator(dst, v, a)
@@ -104,6 +120,9 @@ func DrawHUD(dst *ebiten.Image, v View) {
 	drawText(dst, right, float64(screenW-4-len(right)*7), 2, ColMoney)
 
 	drawPips(dst, v)
+	if v.NamedTotal > 0 && v.Tier > 0 {
+		drawText(dst, fmt.Sprintf("%d/%d", v.NamedDown, v.NamedTotal), 4, 14, ColHUD)
+	}
 
 	if !v.HideStance {
 		stance := "BLADE UP"
@@ -136,7 +155,7 @@ func multLabel(targets int) string {
 	}
 }
 
-func DrawTitle(dst *ebiten.Image) {
+func DrawTitle(dst *ebiten.Image, bestCash, bestTier int) {
 	a, err := ensureAtlas()
 	if err != nil {
 		panic(err)
@@ -149,9 +168,50 @@ func DrawTitle(dst *ebiten.Image) {
 
 	drawTextScaled(dst, "PERMIT DENIED", 52, 36, 2, ColPaint)
 	drawText(dst, "THE COUNTY SAID NO.", 86, 72, ColHUD)
+	drawText(dst, fmt.Sprintf("BEST $%d  REACH %s", bestCash, tierName(bestTier)), 70, 88, ColMoney)
 	drawText(dst, "A/D STEER  W GO  S BACK", 68, 168, ColHUD)
 	drawText(dst, "SPACE BLADE", 112, 180, ColHUD)
 	drawText(dst, "PRESS SPACE", 112, 200, ColPaint)
+}
+
+func tierName(t int) string {
+	switch t {
+	case 1:
+		return "COUNTY"
+	case 2:
+		return "TOWN"
+	case 3:
+		return "CITY"
+	case 4:
+		return "CAPITOL"
+	default:
+		return "—"
+	}
+}
+
+func DrawMeta(dst *ebiten.Image, s meta.Save, news []string) {
+	fill(dst, 0, 0, screenW, screenH, ColBG)
+	drawText(dst, "FILED AMENDMENTS", 8, 8, ColPaint)
+	drawText(dst, "THE COUNTY SAID NO.", 8, 22, ColHUD)
+	newset := map[string]bool{}
+	for _, n := range news {
+		newset[n] = true
+	}
+	y := 40.0
+	for _, id := range meta.Order {
+		mark := "[ ]"
+		col := ColHUD
+		if s.Has(id) {
+			mark = "[X]"
+			col = ColMoney
+		}
+		if newset[id] {
+			col = ColPaint
+		}
+		drawText(dst, mark+" "+s.Label(id), 8, y, col)
+		y += 14
+	}
+	drawText(dst, "SPACE — FILE CLOSED", 8, 208, ColPaint)
 }
 
 const (
@@ -173,6 +233,14 @@ func DrawTally(dst *ebiten.Image, t Tally) {
 		death = "ENGINE COOKED"
 	case "track":
 		death = "TRACK THROWN"
+	case "pinned":
+		death = "PINNED"
+	case "buried":
+		death = "BURIED"
+	case "cleared":
+		death = "CLEARED"
+	case "buzzer":
+		death = "COUNTY CLOCK"
 	}
 	drawText(dst, death, 8, tallyStripY+2, ColRust)
 
@@ -198,6 +266,10 @@ func DrawTally(dst *ebiten.Image, t Tally) {
 }
 
 func drawGround(dst *ebiten.Image, v View, a *atlas) {
+	if v.Procedural {
+		drawProceduralGround(dst, v)
+		return
+	}
 	x0 := int(v.CamX)/tile - 1
 	y0 := int(v.CamY)/tile - 1
 	x1 := int(v.CamX+screenW)/tile + 2
@@ -266,11 +338,94 @@ func drawBuildingShadows(dst *ebiten.Image, v View) {
 
 func drawRubble(dst *ebiten.Image, v View, a *atlas) {
 	for _, r := range v.Rubble {
+		if v.Procedural {
+			sx, sy := world(v, r.X, r.Y)
+			c := ColRubble
+			if r.Ramp {
+				c = shade(ColRubble, 24)
+			}
+			fill(dst, sx, sy, r.W, r.H, c)
+			continue
+		}
 		stampAABB(dst, v, a, "building_rubble", r.X, r.Y, r.W, r.H)
 	}
 }
 
+func drawProceduralGround(dst *ebiten.Image, v View) {
+	fill(dst, 0, 0, screenW, screenH, ColDirt)
+	for _, s := range v.Streets {
+		sx, sy := world(v, s.X, s.Y)
+		fill(dst, sx, sy, s.W, s.H, ColAsphalt)
+	}
+	if len(v.Streets) == 0 {
+		fill(dst, 0, 0, screenW, screenH, ColAsphalt)
+	}
+}
+
+func drawProceduralBuildings(dst *ebiten.Image, v View) {
+	for _, b := range v.Buildings {
+		if b.State == lot.InRubble {
+			continue
+		}
+		sx, sy := world(v, b.X, b.Y)
+		c := matColor(b.Material)
+		if b.State == lot.Cracked {
+			c = shade(c, -30)
+		}
+		fill(dst, sx, sy, b.W, b.H, c)
+		vector.StrokeRect(dst, float32(sx), float32(sy), float32(b.W), float32(b.H), 1, ColFrame, false)
+		if b.Label != "" {
+			drawText(dst, b.Label, sx+3, sy+3, ColLabel)
+		}
+	}
+}
+
+func matColor(m lot.Material) color.RGBA {
+	switch m {
+	case lot.MatWood:
+		return ColManila
+	case lot.MatBrick:
+		return ColRust
+	case lot.MatConcrete:
+		return ColBuilding
+	case lot.MatSteel:
+		return ColSteel
+	default:
+		return ColBuilding
+	}
+}
+
+func drawHeavies(dst *ebiten.Image, v View) {
+	for _, h := range v.Heavies {
+		if !h.Alive {
+			continue
+		}
+		x, y, w, hh := h.Body()
+		sx, sy := world(v, x, y)
+		c := ColFireTruck
+		if h.Kind == threats.HeavyWagon {
+			c = ColWagon
+		}
+		fill(dst, sx, sy, w, hh, c)
+	}
+}
+
+func drawPickups(dst *ebiten.Image, v View) {
+	for _, p := range v.Pickups {
+		if !p.Alive {
+			continue
+		}
+		sx, sy := world(v, p.X, p.Y)
+		fill(dst, sx, sy, p.W, p.H, ColPaint)
+		drawText(dst, p.Kind.Label()[:1], sx+4, sy+2, ColFrame)
+	}
+}
+
 func drawBuildings(dst *ebiten.Image, v View, a *atlas) {
+	if v.Procedural {
+		drawProceduralBuildings(dst, v)
+		return
+	}
 	for _, b := range v.Buildings {
 		if b.State == lot.InRubble {
 			continue

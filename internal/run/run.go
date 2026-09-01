@@ -1,14 +1,14 @@
 package run
 
-// Run is one 3:30 gauntlet. Booleans are the boons.
+// Run is one campaign attempt. County booleans stay the lot boons.
 type Run struct {
 	Tick                             int
 	Over                             bool
-	Death                            string // "", "cooked", "track", "buzzer"
+	Death                            string // "", "cooked", "track", "buzzer", "pinned", "buried", "cleared"
 	StructCash                       int    // spec: Struct$
 	VehicleCash                      int    // spec: Vehicle$
 	TimeAlive                        float64
-	Targets                          int // 0..3
+	Targets                          int // named wrecks this map / county 0..3
 	SheriffDown, YardDown, PlantDown bool
 	CruiserPIT                       bool // true until sheriff smashed
 	DumpTrucks                       bool
@@ -20,6 +20,9 @@ type Run struct {
 	// without skipping an un-fired beat in a single step — comparisons are
 	// monotonic and each event still has an once-flag.
 	PressureBonus float64
+	Tier          int // 0 county, 1 town, 2 city, 3 capitol
+	Seed          int64
+	MapsCleared   int
 }
 
 func New() Run {

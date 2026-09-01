@@ -15,19 +15,46 @@ const (
 	TargetSheriff
 	TargetYard
 	TargetPlant
+	TargetCivic
+	TargetCore
+	TargetPenthouse
+	TargetFloor
+)
+
+type Material int
+
+const (
+	MatWood Material = iota
+	MatBrick
+	MatConcrete
+	MatSteel
+)
+
+type Role int
+
+const (
+	RoleMundane Role = iota
+	RoleTarget
+	RoleFloor
+	RoleCore
+	RolePenthouse
 )
 
 type Building struct {
 	ID         TargetID // TargetNone for mundane
-	Label      string   // "SHERIFF", "YARD", "PLANT", or ""
+	Label      string   // "SHERIFF", "YARD", "PLANT", or civic name
 	X, Y, W, H float64
 	HP, MaxHP  float64
 	State      BuildingState
 	Value      int // structure $ when fully rubble
+	Material   Material
+	Role       Role
 }
 
-type Rubble struct { // axis-aligned, colliding
+type Rubble struct { // axis-aligned, colliding unless Ramp
 	X, Y, W, H float64
+	Mass       float64
+	Ramp       bool
 }
 
 func (b *Building) ApplyDamage(amount float64) (destroyed bool) {
@@ -50,6 +77,25 @@ func (b *Building) Center() (float64, float64) {
 	return b.X + b.W/2, b.Y + b.H/2
 }
 
+func (b *Building) Named() bool {
+	return b.Label != "" && b.Role != RoleMundane
+}
+
 func MaxHP(w, h, hpPerTile float64) float64 {
 	return (w / 16) * (h / 16) * hpPerTile
+}
+
+func MaxHPMat(w, h, hpPerTile float64, mat Material) float64 {
+	mul := 1.0
+	switch mat {
+	case MatWood:
+		mul = 0.70
+	case MatBrick:
+		mul = 1.00
+	case MatConcrete:
+		mul = 1.35
+	case MatSteel:
+		mul = 1.85
+	}
+	return MaxHP(w, h, hpPerTile) * mul
 }

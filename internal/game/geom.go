@@ -128,15 +128,22 @@ func distPointSeg(px, py, x0, y0, x1, y1 float64) float64 {
 }
 
 func bladeAABB(x, y, heading float64, down bool) (bx, by, bw, bh float64) {
+	return bladeAABBW(x, y, heading, down, BladeW)
+}
+
+func bladeAABBW(x, y, heading float64, down bool, bladeW float64) (bx, by, bw, bh float64) {
 	bhBlade := BladeHUp
 	if down {
 		bhBlade = BladeHDown
+	}
+	if bladeW <= 0 {
+		bladeW = BladeW
 	}
 	fx, fy := Forward(heading)
 	rx, ry := Right(heading)
 	minx, miny := math.Inf(1), math.Inf(1)
 	maxx, maxy := math.Inf(-1), math.Inf(-1)
-	for _, sr := range []float64{-BladeW / 2, BladeW / 2} {
+	for _, sr := range []float64{-bladeW / 2, bladeW / 2} {
 		for _, sf := range []float64{BladeReach - bhBlade/2, BladeReach + bhBlade/2} {
 			px := x + rx*sr + fx*sf
 			py := y + ry*sr + fy*sf

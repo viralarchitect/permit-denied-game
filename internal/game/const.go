@@ -113,4 +113,49 @@ const (
 	TapMoveMax     = 12.0
 	TapDurMax      = 0.200 // seconds
 	ThrottleTravel = 40.0
+
+	// campaign clocks (seconds)
+	TownSeconds    = 270.0 // 4:30
+	CitySeconds    = 300.0 // 5:00
+	CapitolSeconds = 330.0 // 5:30
+
+	TownW, TownH       = 1280.0, 1280.0
+	CityW, CityH       = 1280.0, 1280.0
+	CapitolW, CapitolH = 960.0, 1600.0
+
+	TownSpawnX, TownSpawnY       = 640.0, 1180.0
+	CitySpawnX, CitySpawnY       = 640.0, 1180.0
+	CapitolSpawnX, CapitolSpawnY = 480.0, 1500.0
+
+	PinSeconds    = 2.5 // blade-up stalled overlap → PINNED
+	BuriedSeconds = 2.0 // axle under deep rubble → BURIED
+	BuriedNeed    = 2   // overlapping deep rubble piles
+
+	// material wreck multipliers (town+). County stays 1.0.
+	WreckMulWood     = 1.00
+	WreckMulBrick    = 0.85
+	WreckMulConcrete = 0.50
+	WreckMulSteel    = 0.22
+
+	RipperConcreteMul = 2.10
+	RipperSteelMul    = 2.40
+	BallSteelMul      = 2.80
+	DriverMul         = 1.55
+	WideBladeScale    = 1.45
+
+	HeavyFireW, HeavyFireH   = 28.0, 16.0
+	HeavyWagonW, HeavyWagonH = 48.0, 20.0
+	HeavyFireHP              = 22.0
+	HeavyWagonHP             = 36.0
+	HeavyFireSpeed           = 42.0
+	HeavyWagonSpeed          = 28.0
+	HeavyFireCash            = 40
+	HeavyWagonCash           = 80
+
+	MetaEngineAccel = 1.15
+	MetaEngineDown  = 1.22
+	MetaArmorCook   = 0.75
+	MetaArmorPlates = 1
+
+	PickupSize = 16.0
 )

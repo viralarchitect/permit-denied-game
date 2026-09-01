@@ -12,6 +12,7 @@ func main() {
 	ebiten.SetWindowTitle("PERMIT DENIED")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	g := game.New()
+	g.LoadProgress()
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
