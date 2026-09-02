@@ -35,6 +35,7 @@ dist\permitdenied.exe
 | `Space` | Toggle blade |
 | `Enter` / `Space` | Start, close the assessment, file amendments |
 | `Esc` | Title |
+| `M` | Mute / unmute music |
 | `F1` | Debug: peel one plate |
 | `F2` | Debug overlay |
 | `F3` | Debug: skip +15 s |

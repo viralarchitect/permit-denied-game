@@ -103,6 +103,8 @@ const (
 	DollarLife  = 0.7
 	DollarRise  = 20.0
 	TallyRoll   = 1.4
+	HeatVent    = 70.0
+	HeatPulse   = 90.0
 	ShakeWreck  = 3.5
 	ShakePeel   = 5.0
 	GlanceScale = -0.3 // blade-up body vs building

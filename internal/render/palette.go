@@ -54,12 +54,12 @@ var (
 )
 
 func PlateColor(plates int) color.RGBA {
-	switch plates {
-	case 4:
+	switch {
+	case plates >= 4:
 		return ColPaint
-	case 3:
+	case plates == 3:
 		return ColPrimer
-	case 2:
+	case plates == 2:
 		return ColRust
 	default:
 		return ColFrame
