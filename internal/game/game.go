@@ -97,6 +97,9 @@ func (g *Game) Update() error {
 	if g.keyJust(ebiten.KeyF2) {
 		g.debug = !g.debug
 	}
+	if g.keyJust(ebiten.KeyM) {
+		g.audio.ToggleMute()
+	}
 	switch g.scene {
 	case SceneTitle:
 		if in.BladeToggle || in.Confirm {
@@ -120,6 +123,11 @@ func (g *Game) Update() error {
 		g.fx.TallyT += Dt
 		g.audio.Duck(true)
 		if in.BladeToggle || in.Confirm {
+			if g.run.Tier == 0 && g.run.Death != "cleared" {
+				g.startRun()
+				g.audio.Duck(false)
+				break
+			}
 			g.leaveResult()
 			g.audio.Duck(false)
 		}
@@ -195,6 +203,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			Procedural:  g.procedural,
 			Tier:        g.run.Tier,
 			KitCount:    g.kit.Count(),
+			DollarLife:  DollarLife,
+			DollarRise:  DollarRise,
+			HeatVent:    HeatVent,
+			HeatPulse:   HeatPulse,
 		}
 		render.DrawWorld(screen, v)
 		render.DrawHUD(screen, v)
@@ -208,6 +220,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				Targets:     g.run.Targets,
 				Mult:        Mult(g.run.Targets),
 				Total:       g.run.Final(Mult(g.run.Targets)),
+				Roll:        TallyRoll,
 			})
 		}
 	}

@@ -787,7 +787,7 @@ Use `text/v2` with a bundled TTF (e.g. a small pixel font under `internal/render
 
 Two channels:
 
-1. **Chase loop** — 8-bar square/triangle, ~140 BPM, generated PCM or a tiny WAV embed. Duck it 30% on tally.
+1. **Chase loop** — 8-bar square/triangle, ~140 BPM, generated PCM or a tiny WAV embed. Duck it 30% on tally. `M` toggles mute for this loop only (session-only; SFX stay audible).
 2. **Crunch** — one-shot noise burst on wreck / peel.
 
 `audio.NewContext(44100)`. Do not add voice or radio chatter.

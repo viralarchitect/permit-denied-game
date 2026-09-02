@@ -22,3 +22,19 @@ func TestDrawTallyLinesFitOnScreen(t *testing.T) {
 		t.Fatalf("TOTAL clipped: y=%.0f..%.0f screenH=%d", tallyStatY(4), totalBottom, screenH)
 	}
 }
+
+func TestTallyCopy(t *testing.T) {
+	cases := map[string]string{
+		"cooked": "ENGINE COOKED",
+		"track":  "TRACK THROWN",
+		"buzzer": "COUNTY CLOCK",
+	}
+	for death, want := range cases {
+		if got := deathLine(death); got != want {
+			t.Fatalf("death %q: got %q want %q", death, got, want)
+		}
+	}
+	if againPrompt() != "SPACE / TAP — AGAIN" {
+		t.Fatalf("again=%q", againPrompt())
+	}
+}

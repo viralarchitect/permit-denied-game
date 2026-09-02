@@ -65,3 +65,54 @@ func TestTallyDuckWinsOverWreck(t *testing.T) {
 		t.Fatalf("tally duck ChaseVolume=%v want 0.12", v)
 	}
 }
+
+func TestMuteZerosChaseVolume(t *testing.T) {
+	a := &Audio{}
+	a.StartChase()
+	if v := a.ChaseVolume(); v != 0.35 {
+		t.Fatalf("ChaseVolume=%v want 0.35", v)
+	}
+	a.ToggleMute()
+	if !a.MusicMuted() {
+		t.Fatal("want MusicMuted after ToggleMute")
+	}
+	if v := a.ChaseVolume(); v != 0 {
+		t.Fatalf("muted ChaseVolume=%v want 0", v)
+	}
+}
+
+func TestMuteSurvivesStopAndStartChase(t *testing.T) {
+	a := &Audio{}
+	a.StartChase()
+	a.ToggleMute()
+	a.Stop()
+	a.StartChase()
+	if !a.MusicMuted() {
+		t.Fatal("mute cleared by Stop/StartChase")
+	}
+	if v := a.ChaseVolume(); v != 0 {
+		t.Fatalf("ChaseVolume=%v want 0 after restart", v)
+	}
+}
+
+func TestMuteLeavesOneShotVolume(t *testing.T) {
+	a := &Audio{}
+	a.StartChase()
+	a.ToggleMute()
+	a.Wreck()
+	var found bool
+	for _, p := range a.shots {
+		if p != nil && p.IsPlaying() {
+			found = true
+			if v := p.Volume(); v != 0.55 {
+				t.Fatalf("one-shot Volume=%v want 0.55", v)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no one-shot playing after Wreck")
+	}
+	if v := a.ChaseVolume(); v != 0 {
+		t.Fatalf("chase still muted: ChaseVolume=%v want 0", v)
+	}
+}

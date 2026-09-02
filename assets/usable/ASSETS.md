@@ -97,6 +97,8 @@ building_intact|cracked|rubble // 16×16 stamp if you tile roofs later
 dollar
 boom_00 .. boom_05            // 48×48 smash, draw-only, no AABB
 spark_00 .. spark_03          // 16×16 glance / jersey chip
+fire_00, fire_02, ... fire_14 // 32×16 campaign fire truck, even facings
+wagon_00, wagon_02, ... wagon_14 // 48×24 campaign wagon, even facings
 ```
 
 Regenerate smash frames and WAVs from the repo root:
@@ -106,6 +108,20 @@ go run ./cmd/genfx
 ```
 
 That restamps `sprites.png` and writes `usable/sfx/{wreck,peel,burst}.wav`. It does not rewrite `sprites.json` if `boom_00` already exists.
+
+## Slot-locked pipeline
+
+`sprites.json` name → rect and tile IDs 0–18 are **locks**. Do not repack sheets. Do not move an existing frame. Masters live in `assets/src/` (not embedded). Slot list: [`../LEDGER.md`](../LEDGER.md).
+
+Stamp one master into one reserved rect:
+
+```
+go run ./cmd/stamp-asset -frame dozer_up_00
+go run ./cmd/stamp-asset -tile 5
+go run ./cmd/stamp-asset -reserve name=x,y,w,h
+```
+
+Reserve first (no overlap), write the master at exact `w×h`, stamp, then mark the LEDGER row locked. Do not invent a second atlas format.
 
 Plate / heat: keep **one** 16-facing set (`dozer_up_*` / `dozer_down_*`) and `ColorScale` toward primer / rust / frame / `#C04040`. The plate preview frames are for artists, not extra draw paths.
 

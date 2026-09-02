@@ -10,6 +10,8 @@ alwaysApply: false
 
 Load from `assets/usable/` via `assets.FS` (`lot.json`, `tileset.png`, `sprites.png`, `sprites.json`). Older drafts (`assets/atlas.json`, `assets/lot_40x80.csv`) stay unloaded.
 
+**Usable sheets are slot-locked.** Masters live in `assets/src/` and are not embedded. `go run ./cmd/stamp-asset` is the only writer of usable pixels (except `cmd/genfx` restamping `boom_*` / `spark_*` in place). `assets/LEDGER.md` is the slot list. Never repack; never move an existing frame rect or tile ID 0–18.
+
 **Tiles draw the ground. Objects own AABBs.** Do not bake buildings into the tile grid and also spawn `lot.Building` from literals (double-draw). Do not use the tile layer as collision. Concrete decals are paint; solidity is `threats.Blocker`.
 
 `lot.go` literals remain source of truth until a loader parses `lot.json` objects into `lot.New`. The Tiled object layer is a mirror — keep them in lockstep. Tiled GIDs are `localID+1`; `lot.json` uses raw IDs (0 = empty).

@@ -26,6 +26,7 @@ type Audio struct {
 	burstB    []byte
 	tallyDuck bool
 	wreckDuck bool
+	musicMute bool
 	ready     bool
 }
 
@@ -121,11 +122,33 @@ func (a *Audio) ChaseVolume() float64 {
 	return a.chase.Volume()
 }
 
+func (a *Audio) ToggleMute() {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ensure()
+	a.musicMute = !a.musicMute
+	a.applyChaseVol()
+}
+
+func (a *Audio) MusicMuted() bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.musicMute
+}
+
 func (a *Audio) applyChaseVol() {
 	if a.chase == nil {
 		return
 	}
 	switch {
+	case a.musicMute:
+		a.chase.SetVolume(0)
 	case a.tallyDuck:
 		a.chase.SetVolume(0.12)
 	case a.wreckDuck:

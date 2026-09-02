@@ -67,6 +67,10 @@ type View struct {
 	Procedural                 bool
 	Tier                       int
 	KitCount                   int
+	DollarLife                 float64
+	DollarRise                 float64
+	HeatVent                   float64
+	HeatPulse                  float64
 }
 
 type Tally struct {
@@ -78,6 +82,7 @@ type Tally struct {
 	Targets     int
 	Mult        float64
 	Total       int
+	Roll        float64
 }
 
 func DrawWorld(dst *ebiten.Image, v View) {
@@ -92,7 +97,7 @@ func DrawWorld(dst *ebiten.Image, v View) {
 	drawBuildings(dst, v, a)
 	drawRubble(dst, v, a)
 	drawBlockers(dst, v, a)
-	drawHeavies(dst, v)
+	drawHeavies(dst, v, a)
 	drawPickups(dst, v)
 	drawPeds(dst, v, a)
 	drawCruisers(dst, v, a)
@@ -225,45 +230,58 @@ func tallyStatY(i int) float64 {
 	return float64(tallyStripY + tallyFirstY + i*tallyLineH)
 }
 
-func DrawTally(dst *ebiten.Image, t Tally) {
-	fill(dst, 0, tallyStripY, screenW, tallyStripH, ColPanel)
-	death := "COUNTY CLOCK"
-	switch t.Death {
+func deathLine(death string) string {
+	switch death {
 	case "cooked":
-		death = "ENGINE COOKED"
+		return "ENGINE COOKED"
 	case "track":
-		death = "TRACK THROWN"
+		return "TRACK THROWN"
 	case "pinned":
-		death = "PINNED"
+		return "PINNED"
 	case "buried":
-		death = "BURIED"
+		return "BURIED"
 	case "cleared":
-		death = "CLEARED"
+		return "CLEARED"
 	case "buzzer":
-		death = "COUNTY CLOCK"
-	}
-	drawText(dst, death, 8, tallyStripY+2, ColRust)
-
-	if t.T >= 0.2 {
-		drawText(dst, fmt.Sprintf("STRUCTURE  $%d", t.StructCash), 8, tallyStatY(0), ColMoney)
-	}
-	if t.T >= 0.45 {
-		drawText(dst, fmt.Sprintf("VEHICLE    $%d", t.VehicleCash), 8, tallyStatY(1), ColMoney)
-	}
-	if t.T >= 0.7 {
-		drawText(dst, fmt.Sprintf("TIME       %d", int(t.Time)), 8, tallyStatY(2), ColHUD)
-	}
-	if t.T >= 0.95 {
-		drawText(dst, fmt.Sprintf("TARGETS    %d ×%s", t.Targets, multLabel(t.Targets)), 8, tallyStatY(3), ColPlantPip)
-	}
-	if t.T >= 1.2 {
-		drawText(dst, fmt.Sprintf("TOTAL      %d", t.Total), 8, tallyStatY(4), ColPaint)
-	}
-	if t.T >= 1.4 {
-		drawText(dst, "THE COUNTY SAID NO.", 148, float64(tallyStripY+2), ColHUD)
-		drawText(dst, "SPACE / TAP — AGAIN", 148, tallyStatY(4), ColHUD)
+		return "COUNTY CLOCK"
+	default:
+		return "COUNTY CLOCK"
 	}
 }
+
+func againPrompt() string {
+	return "SPACE / TAP — AGAIN"
+}
+
+func DrawTally(dst *ebiten.Image, t Tally) {
+	fill(dst, 0, tallyStripY, screenW, tallyStripH, ColPanel)
+	drawText(dst, deathLine(t.Death), 8, tallyStripY+2, ColRust)
+
+	scale := 1.0
+	if t.Roll > 0 {
+		scale = t.Roll / 1.4
+	}
+	if t.T >= 0.2*scale {
+		drawText(dst, fmt.Sprintf("STRUCTURE  $%d", t.StructCash), 8, tallyStatY(0), ColMoney)
+	}
+	if t.T >= 0.45*scale {
+		drawText(dst, fmt.Sprintf("VEHICLE    $%d", t.VehicleCash), 8, tallyStatY(1), ColMoney)
+	}
+	if t.T >= 0.7*scale {
+		drawText(dst, fmt.Sprintf("TIME       %d", int(t.Time)), 8, tallyStatY(2), ColHUD)
+	}
+	if t.T >= 0.95*scale {
+		drawText(dst, fmt.Sprintf("TARGETS    %d ×%s", t.Targets, multLabel(t.Targets)), 8, tallyStatY(3), ColPlantPip)
+	}
+	if t.T >= 1.2*scale {
+		drawText(dst, fmt.Sprintf("TOTAL      %d", t.Total), 8, tallyStatY(4), ColPaint)
+	}
+	if t.T >= 1.4*scale {
+		drawText(dst, "THE COUNTY SAID NO.", 148, float64(tallyStripY+2), ColHUD)
+		drawText(dst, againPrompt(), 148, tallyStatY(4), ColHUD)
+	}
+}
+
 
 func drawGround(dst *ebiten.Image, v View, a *atlas) {
 	if v.Procedural {
@@ -395,18 +413,17 @@ func matColor(m lot.Material) color.RGBA {
 	}
 }
 
-func drawHeavies(dst *ebiten.Image, v View) {
+func drawHeavies(dst *ebiten.Image, v View, a *atlas) {
 	for _, h := range v.Heavies {
 		if !h.Alive {
 			continue
 		}
-		x, y, w, hh := h.Body()
-		sx, sy := world(v, x, y)
-		c := ColFireTruck
+		name := fmt.Sprintf("fire_%02d", evenFacing(h.Heading))
 		if h.Kind == threats.HeavyWagon {
-			c = ColWagon
+			name = fmt.Sprintf("wagon_%02d", evenFacing(h.Heading))
 		}
-		fill(dst, sx, sy, w, hh, c)
+		sx, sy := world(v, h.X, h.Y)
+		blitFrame(dst, a, name, sx, sy)
 	}
 }
 
@@ -555,7 +572,11 @@ func drawDozer(dst *ebiten.Image, v View, a *atlas) {
 	base := PlateColor(d.Plates)
 	t := d.Heat / 100
 	col := mix(base, ColHeat, t*0.85)
-	if d.Heat > 90 && v.Tick%12 < 6 {
+	pulse := v.HeatPulse
+	if pulse <= 0 {
+		pulse = 90
+	}
+	if d.Heat > pulse && v.Tick%12 < 6 {
 		col = mix(col, ColHeat, 0.5)
 	}
 	if d.IFrames > 0 && v.Tick%4 < 2 {
@@ -579,7 +600,11 @@ func drawDozer(dst *ebiten.Image, v View, a *atlas) {
 	)
 	dst.DrawImage(img, op)
 
-	if d.Heat > 70 && v.Tick%12 < 6 {
+	vent := v.HeatVent
+	if vent <= 0 {
+		vent = 70
+	}
+	if d.Heat > vent && v.Tick%12 < 6 {
 		fx, fy := math.Sin(d.Heading), -math.Cos(d.Heading)
 		px := sx - fy*6 - fx*4
 		py := sy + fx*6 - fy*4
@@ -613,8 +638,16 @@ func drawBursts(dst *ebiten.Image, v View, a *atlas) {
 }
 
 func drawDollars(dst *ebiten.Image, v View, a *atlas) {
+	life := v.DollarLife
+	if life <= 0 {
+		life = 0.7
+	}
+	risePx := v.DollarRise
+	if risePx <= 0 {
+		risePx = 20
+	}
 	for _, d := range v.Dollars {
-		rise := (0.7 - d.Life) / 0.7 * 20
+		rise := (life - d.Life) / life * risePx
 		if rise < 0 {
 			rise = 0
 		}
