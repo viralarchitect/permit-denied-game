@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 )
 
 func main() {
@@ -31,8 +32,8 @@ func main() {
 	case *frame != "":
 		err = StampFrame(paths, *frame)
 	case *tileStr != "":
-		var id int
-		if _, e := fmt.Sscanf(*tileStr, "%d", &id); e != nil {
+		id, e := strconv.Atoi(*tileStr)
+		if e != nil {
 			err = fmt.Errorf("bad -tile %q", *tileStr)
 			break
 		}
