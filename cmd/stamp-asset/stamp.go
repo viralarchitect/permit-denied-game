@@ -153,12 +153,23 @@ func blitIntoSheet(sheetPath string, master image.Image, r Rect) error {
 
 func writeReplace(path string, data []byte) error {
 	dir := filepath.Dir(path)
+	var mode os.FileMode = 0666
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
 	name := tmp.Name()
 	cleanup := func() { _ = os.Remove(name) }
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		cleanup()
+		return err
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		cleanup()
@@ -170,20 +181,10 @@ func writeReplace(path string, data []byte) error {
 	}
 	if err := os.Rename(name, path); err == nil {
 		return nil
-	}
-	if _, statErr := os.Stat(path); statErr != nil {
+	} else {
 		cleanup()
 		return err
 	}
-	if err := os.Remove(path); err != nil {
-		cleanup()
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		cleanup()
-		return err
-	}
-	return nil
 }
 
 func StampFrame(paths Paths, name string) error {
@@ -219,7 +220,7 @@ func findTileMaster(srcTiles string, id int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var match string
+	var matches []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -229,11 +230,16 @@ func findTileMaster(srcTiles string, id int) (string, error) {
 			continue
 		}
 		if strings.HasPrefix(n, prefix) {
-			match = filepath.Join(srcTiles, n)
-			break
+			matches = append(matches, filepath.Join(srcTiles, n))
 		}
 	}
-	if match == "" {
+	if len(matches) > 1 {
+		return "", fmt.Errorf("multiple masters for tile %d under %s", id, srcTiles)
+	}
+	var match string
+	if len(matches) == 1 {
+		match = matches[0]
+	} else {
 		cand := filepath.Join(srcTiles, strconv.Itoa(id)+".png")
 		if _, err := os.Stat(cand); err == nil {
 			match = cand
@@ -315,7 +321,9 @@ func StampTile(paths Paths, id int) error {
 		if slot.Status != "reserved" && slot.Status != "locked" {
 			return fmt.Errorf("tile id %d LEDGER status %q", id, slot.Status)
 		}
-		r = slot.Rect
+		if slot.Rect != r {
+			return fmt.Errorf("tile id %d LEDGER rectangle %v does not match canonical rectangle %v", id, slot.Rect, r)
+		}
 	}
 	masterPath, err := findTileMaster(paths.SrcTiles, id)
 	if err != nil {
@@ -350,6 +358,9 @@ func ParseReserve(spec string) (name string, r Rect, err error) {
 		vals[i] = v
 	}
 	r = Rect{X: vals[0], Y: vals[1], W: vals[2], H: vals[3]}
+	if r.X < 0 || r.Y < 0 {
+		return "", Rect{}, fmt.Errorf("reserve coordinates must be non-negative")
+	}
 	if r.W <= 0 || r.H <= 0 {
 		return "", Rect{}, fmt.Errorf("reserve size must be positive")
 	}
@@ -410,8 +421,12 @@ func appendFrameJSON(raw []byte, name string, r Rect) ([]byte, error) {
 		return nil, fmt.Errorf("sprites.json frames object unclosed")
 	}
 	inner := bytes.TrimSpace(raw[start+1 : end])
-	entry := fmt.Sprintf(`"%s": { "x": %d, "y": %d, "w": %d, "h": %d, "anchor": [%d, %d] }`,
-		name, r.X, r.Y, r.W, r.H, r.W/2, r.H/2)
+	encodedName, err := json.Marshal(name)
+	if err != nil {
+		return nil, fmt.Errorf("encode frame name: %w", err)
+	}
+	entry := fmt.Sprintf(`%s: { "x": %d, "y": %d, "w": %d, "h": %d, "anchor": [%d, %d] }`,
+		encodedName, r.X, r.Y, r.W, r.H, r.W/2, r.H/2)
 	var mid []byte
 	if len(inner) == 0 {
 		mid = []byte("\n    " + entry + "\n  ")
