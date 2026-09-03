@@ -82,6 +82,13 @@ const (
 	ExcavatorKillCash = 200
 	ExcavatorBodyW    = 20.0
 	ExcavatorBodyH    = 36.0
+	// Excavator placement bounds offsets and fallback coordinates — §12.
+	ExcavatorBoundsOffsetX = 10.0
+	ExcavatorBoundsOffsetY = 18.0
+	ExcavatorPlaceX        = 288.0
+	ExcavatorPlaceY        = 520.0
+	ExcavatorFallbackX     = 288.0
+	ExcavatorFallbackY     = 360.0
 	BoomLen           = 48.0
 	BoomHalfW         = 5.0
 	BoomPeriod        = 0.8

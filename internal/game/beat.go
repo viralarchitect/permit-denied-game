@@ -87,17 +87,17 @@ func jerseyHPNow(brittle bool) float64 {
 }
 
 func (g *Game) placeExcavator() bool {
-	x, y := 288.0, 520.0
-	if !countyRectWithinWorld(g, x-10, y-18, ExcavatorBodyW, ExcavatorBodyH) {
-		x, y = 288, 360
+	x, y := ExcavatorPlaceX, ExcavatorPlaceY
+	if !countyRectWithinWorld(g, x-ExcavatorBoundsOffsetX, y-ExcavatorBoundsOffsetY, ExcavatorBodyW, ExcavatorBodyH) {
+		x, y = ExcavatorFallbackX, ExcavatorFallbackY
 	}
-	if !countyRectWithinWorld(g, x-10, y-18, ExcavatorBodyW, ExcavatorBodyH) {
+	if !countyRectWithinWorld(g, x-ExcavatorBoundsOffsetX, y-ExcavatorBoundsOffsetY, ExcavatorBodyW, ExcavatorBodyH) {
 		return false
 	}
 	if g.lot.RubbleBlocks(x-16, y-16, 32, 32) {
-		x, y = 288, 360
+		x, y = ExcavatorFallbackX, ExcavatorFallbackY
 	}
-	if !countyRectWithinWorld(g, x-10, y-18, ExcavatorBodyW, ExcavatorBodyH) {
+	if !countyRectWithinWorld(g, x-ExcavatorBoundsOffsetX, y-ExcavatorBoundsOffsetY, ExcavatorBodyW, ExcavatorBodyH) {
 		return false
 	}
 	g.excavator = threats.Excavator{
@@ -181,8 +181,8 @@ func countyBlockerIfInBounds(g *Game, blocker threats.Blocker) (threats.Blocker,
 }
 
 func hasCountyExcavatorSlot(g *Game) bool {
-	return countyRectWithinWorld(g, 288-10, 520-18, ExcavatorBodyW, ExcavatorBodyH) ||
-		countyRectWithinWorld(g, 288-10, 360-18, ExcavatorBodyW, ExcavatorBodyH)
+	return countyRectWithinWorld(g, ExcavatorPlaceX-ExcavatorBoundsOffsetX, ExcavatorPlaceY-ExcavatorBoundsOffsetY, ExcavatorBodyW, ExcavatorBodyH) ||
+		countyRectWithinWorld(g, ExcavatorFallbackX-ExcavatorBoundsOffsetX, ExcavatorFallbackY-ExcavatorBoundsOffsetY, ExcavatorBodyW, ExcavatorBodyH)
 }
 
 func countyPointWithinWorld(g *Game, x, y, r float64) bool {
