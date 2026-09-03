@@ -44,12 +44,7 @@ func TestImmobilizeStalledOverlapPins(t *testing.T) {
 	if b == nil {
 		t.Fatal("missing sheriff")
 	}
-	g.dozer.X = b.X + b.W/2
-	g.dozer.Y = b.Y + b.H
-	g.dozer.Heading = 0
-	g.dozer.BladeDown = false
-	g.dozer.Speed = 0
-	g.dozer.Heat = 0
+	poseSouthOf(g, b, false)
 	g.blockers = append(g.blockers, threats.Jersey(b.X, b.Y+b.H+2, b.W, 20, 99))
 	for i := 0; i < int(PinSeconds*TPS)+5; i++ {
 		g.stepImmobilize(true, true)

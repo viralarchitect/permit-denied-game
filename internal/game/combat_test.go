@@ -36,6 +36,10 @@ func TestDestroyYardDespawnsDumps(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
+	g.blockers = append(g.blockers,
+		threats.Dump(220, 232, 40, 24, DumpHP),
+		threats.Dump(264, 232, 40, 24, DumpHP),
+	)
 	living := 0
 	for _, b := range g.blockers {
 		if b.Kind == threats.BlockerDump && b.Alive {
@@ -85,17 +89,8 @@ func TestKillJerseyLeavesRubble(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
-	var jersey *threats.Blocker
-	for i := range g.blockers {
-		b := &g.blockers[i]
-		if b.Kind == threats.BlockerJersey && b.X == 400 && b.Y == 780 {
-			jersey = b
-			break
-		}
-	}
-	if jersey == nil {
-		t.Fatal("missing yard-mouth jersey")
-	}
+	g.blockers = append(g.blockers, threats.Jersey(176, 216, 48, 16, JerseyHP))
+	jersey := &g.blockers[len(g.blockers)-1]
 	before := len(g.lot.Rubble)
 	g.killBlocker(jersey)
 	if len(g.lot.Rubble) != before+1 {
@@ -118,7 +113,7 @@ func TestKillDumpLeavesRubble(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
-	g.blockers = append(g.blockers, threats.Dump(300, 720, 40, 24, DumpHP))
+	g.blockers = append(g.blockers, threats.Dump(220, 232, 40, 24, DumpHP))
 	before := len(g.lot.Rubble)
 	g.killBlocker(&g.blockers[len(g.blockers)-1])
 	if len(g.lot.Rubble) != before+1 {
@@ -141,6 +136,10 @@ func TestYardDespawnDumpsLeaveNoRubble(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
+	g.blockers = append(g.blockers,
+		threats.Dump(220, 232, 40, 24, DumpHP),
+		threats.Dump(264, 232, 40, 24, DumpHP),
+	)
 	living := 0
 	for _, b := range g.blockers {
 		if b.Kind == threats.BlockerDump && b.Alive {
@@ -162,7 +161,7 @@ func TestYardDespawnDumpsLeaveNoRubble(t *testing.T) {
 		}
 	}
 	for _, r := range g.lot.Rubble {
-		if overlapsDumpCell(r, 456, 840, 40, 24) || overlapsDumpCell(r, 520, 840, 40, 24) {
+		if overlapsDumpCell(r, 220, 232, 40, 24) || overlapsDumpCell(r, 264, 232, 40, 24) {
 			t.Fatalf("unexpected rubble at dump cell (%v,%v) size %vx%v", r.X, r.Y, r.W, r.H)
 		}
 	}
@@ -179,19 +178,10 @@ func TestRubbleNeverCulled(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
-	var jersey *threats.Blocker
-	for i := range g.blockers {
-		b := &g.blockers[i]
-		if b.Kind == threats.BlockerJersey && b.X == 400 && b.Y == 780 {
-			jersey = b
-			break
-		}
-	}
-	if jersey == nil {
-		t.Fatal("missing yard-mouth jersey")
-	}
+	g.blockers = append(g.blockers, threats.Jersey(176, 216, 48, 16, JerseyHP))
+	jersey := &g.blockers[len(g.blockers)-1]
 	g.killBlocker(jersey)
-	g.blockers = append(g.blockers, threats.Dump(300, 720, 40, 24, DumpHP))
+	g.blockers = append(g.blockers, threats.Dump(220, 232, 40, 24, DumpHP))
 	g.killBlocker(&g.blockers[len(g.blockers)-1])
 	if len(g.lot.Rubble) != 2 {
 		t.Fatalf("rubble len=%d want 2", len(g.lot.Rubble))
@@ -210,15 +200,16 @@ func TestSheriffDownNoCruiserPeel(t *testing.T) {
 	if g.run.CruiserPIT {
 		t.Fatal("CruiserPIT still true")
 	}
-	g.dozer.X = SpawnX
-	g.dozer.Y = SpawnY
-	g.dozer.Heading = 0
+	x, y, heading := countySpawn(t)
+	g.dozer.X = x
+	g.dozer.Y = y
+	g.dozer.Heading = heading
 	g.dozer.BladeDown = false
 	g.dozer.IFrames = 0
 	g.dozer.Speed = 0
 	plates := g.dozer.Plates
 	g.cruisers = []threats.Cruiser{
-		{X: SpawnX + 16, Y: SpawnY, Alive: true},
+		{X: x + 16, Y: y, Alive: true},
 	}
 	g.stepCruisers()
 	if g.dozer.Plates != plates {
@@ -252,17 +243,8 @@ func TestKillBlockerRubbleIsCollectSolid(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
-	var jersey *threats.Blocker
-	for i := range g.blockers {
-		b := &g.blockers[i]
-		if b.Kind == threats.BlockerJersey && b.X == 400 && b.Y == 780 {
-			jersey = b
-			break
-		}
-	}
-	if jersey == nil {
-		t.Fatal("missing yard-mouth jersey")
-	}
+	g.blockers = append(g.blockers, threats.Jersey(176, 216, 48, 16, JerseyHP))
+	jersey := &g.blockers[len(g.blockers)-1]
 	g.killBlocker(jersey)
 	r := g.lot.Rubble[len(g.lot.Rubble)-1]
 	found := false
@@ -274,5 +256,33 @@ func TestKillBlockerRubbleIsCollectSolid(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("rubble AABB %v,%v %vx%v missing from collectSolids", r.X, r.Y, r.W, r.H)
+	}
+}
+
+func TestDozerPackBuildingRubbleBlocksMovement(t *testing.T) {
+	g := New()
+	g.audio = nil
+	g.startRun()
+	b := firstCountyMundane(g)
+	if b == nil {
+		t.Fatal("missing mundane county building")
+	}
+	g.destroyBuilding(b)
+	r := g.lot.Rubble[len(g.lot.Rubble)-1]
+	if r.Ramp {
+		t.Fatalf("dozer rubble ramp=%v want false", r.Ramp)
+	}
+	g.dozer.X = r.X + r.W/2
+	g.dozer.Y = r.Y + r.H + DozerBodyR - 1
+	g.dozer.Heading = 0
+	g.dozer.BladeDown = false
+	for i := 0; i < TPS/2; i++ {
+		g.stepPlay(Input{Throttle: 1})
+		if g.run.Over {
+			t.Fatalf("run ended while testing rubble block: %q", g.run.Death)
+		}
+	}
+	if g.dozer.Y < r.Y+r.H+DozerBodyR-0.5 {
+		t.Fatalf("dozer crossed solid rubble: Y=%v rubbleBottom=%v", g.dozer.Y, r.Y+r.H)
 	}
 }

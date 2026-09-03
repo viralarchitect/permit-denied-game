@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 
+	"permitdenied/internal/dozerpack"
 	"permitdenied/internal/threats"
 )
 
@@ -20,13 +21,15 @@ func (g *Game) fireBeats() {
 	}
 	if !g.beat.blockers && t >= TBlockers {
 		g.beat.blockers = true
-		g.blockers = append(g.blockers,
+		g.blockers = append(g.blockers, inBoundsCountyBlockers(g,
 			threats.Jersey(248, 1000, 48, 16, jerseyHPNow(g.run.WallsBrittle)),
 			threats.Jersey(344, 860, 48, 16, jerseyHPNow(g.run.WallsBrittle)),
 			threats.Jersey(248, 480, 56, 16, jerseyHPNow(g.run.WallsBrittle)),
-		)
+		)...)
 		if g.run.DumpTrucks {
-			g.blockers = append(g.blockers, threats.Dump(300, 720, 40, 24, DumpHP))
+			if dump, ok := countyBlockerIfInBounds(g, threats.Dump(300, 720, 40, 24, DumpHP)); ok {
+				g.blockers = append(g.blockers, dump)
+			}
 		}
 		g.spawnCruisers(1) // §12: +1 at 40 s
 	}
@@ -40,8 +43,10 @@ func (g *Game) fireBeats() {
 	}
 	if !g.beat.exAnn && t >= TExAnnounce {
 		g.beat.exAnn = true
-		g.excavator.Announced = true
-		g.fx.SetBanner("HEAVY EN ROUTE", BannerLife)
+		if hasCountyExcavatorSlot(g) {
+			g.excavator.Announced = true
+			g.fx.SetBanner("HEAVY EN ROUTE", BannerLife)
+		}
 	}
 	if !g.beat.exArr && t >= TExArrive {
 		g.beat.exArr = true
@@ -67,7 +72,9 @@ func (g *Game) fireBeats() {
 			g.excavator.Swinging = true
 		}
 		if !g.excavator.Alive && g.run.DumpTrucks {
-			g.blockers = append(g.blockers, threats.Dump(310, 600, 40, 24, DumpHP))
+			if dump, ok := countyBlockerIfInBounds(g, threats.Dump(310, 600, 40, 24, DumpHP)); ok {
+				g.blockers = append(g.blockers, dump)
+			}
 		}
 	}
 }
@@ -79,10 +86,19 @@ func jerseyHPNow(brittle bool) float64 {
 	return JerseyHP
 }
 
-func (g *Game) placeExcavator() {
+func (g *Game) placeExcavator() bool {
 	x, y := 288.0, 520.0
+	if !countyRectWithinWorld(g, x-10, y-18, ExcavatorBodyW, ExcavatorBodyH) {
+		x, y = 288, 360
+	}
+	if !countyRectWithinWorld(g, x-10, y-18, ExcavatorBodyW, ExcavatorBodyH) {
+		return false
+	}
 	if g.lot.RubbleBlocks(x-16, y-16, 32, 32) {
 		x, y = 288, 360
+	}
+	if !countyRectWithinWorld(g, x-10, y-18, ExcavatorBodyW, ExcavatorBodyH) {
+		return false
 	}
 	g.excavator = threats.Excavator{
 		X: x, Y: y,
@@ -93,12 +109,19 @@ func (g *Game) placeExcavator() {
 		HP:        ExcavatorHP,
 		Swinging:  true,
 	}
+	return true
 }
 
 func (g *Game) spawnCruisers(n int) {
 	spots := [][2]float64{
 		{280, 760}, {360, 800}, {320, 900},
 		{260, 700}, {380, 700}, {300, 850},
+	}
+	if g.scene == ScenePlay && len(g.countyCruiserSpots) > 0 {
+		spots = make([][2]float64, 0, len(g.countyCruiserSpots))
+		for _, s := range g.countyCruiserSpots {
+			spots = append(spots, [2]float64{s.X, s.Y})
+		}
 	}
 	alive := 0
 	for _, c := range g.cruisers {
@@ -107,14 +130,67 @@ func (g *Game) spawnCruisers(n int) {
 		}
 	}
 	i := 0
-	for n > 0 && alive < CruiserCap {
+	for n > 0 && alive < CruiserCap && len(spots) > 0 {
 		s := spots[i%len(spots)]
 		off := float64(i / len(spots) * 14)
-		g.cruisers = append(g.cruisers, threats.SpawnCruiser(s[0]+off, s[1]+off))
+		x, y := s[0]+off, s[1]+off
+		if !countyPointWithinWorld(g, x, y, CruiserRadius) {
+			i++
+			if i > len(spots)*2 {
+				break
+			}
+			continue
+		}
+		g.cruisers = append(g.cruisers, threats.SpawnCruiser(x, y))
 		n--
 		alive++
 		i++
 	}
+}
+
+func blockersFromPack(specs []dozerpack.BlockerSpec) []threats.Blocker {
+	out := make([]threats.Blocker, 0, len(specs))
+	for _, spec := range specs {
+		switch spec.Kind {
+		case dozerpack.BlockerJersey:
+			out = append(out, threats.Jersey(spec.X, spec.Y, spec.W, spec.H, JerseyHP))
+		case dozerpack.BlockerDump:
+			out = append(out, threats.Dump(spec.X, spec.Y, spec.W, spec.H, DumpHP))
+		case dozerpack.BlockerConcrete:
+			out = append(out, threats.Concrete(spec.X, spec.Y, spec.W, spec.H))
+		}
+	}
+	return out
+}
+
+func inBoundsCountyBlockers(g *Game, blockers ...threats.Blocker) []threats.Blocker {
+	out := make([]threats.Blocker, 0, len(blockers))
+	for _, blocker := range blockers {
+		if inBounds, ok := countyBlockerIfInBounds(g, blocker); ok {
+			out = append(out, inBounds)
+		}
+	}
+	return out
+}
+
+func countyBlockerIfInBounds(g *Game, blocker threats.Blocker) (threats.Blocker, bool) {
+	if !countyRectWithinWorld(g, blocker.X, blocker.Y, blocker.W, blocker.H) {
+		return threats.Blocker{}, false
+	}
+	return blocker, true
+}
+
+func hasCountyExcavatorSlot(g *Game) bool {
+	return countyRectWithinWorld(g, 288-10, 520-18, ExcavatorBodyW, ExcavatorBodyH) ||
+		countyRectWithinWorld(g, 288-10, 360-18, ExcavatorBodyW, ExcavatorBodyH)
+}
+
+func countyPointWithinWorld(g *Game, x, y, r float64) bool {
+	return x >= r && y >= r && x <= g.worldW()-r && y <= g.worldH()-r
+}
+
+func countyRectWithinWorld(g *Game, x, y, w, h float64) bool {
+	return x >= 0 && y >= 0 && x+w <= g.worldW() && y+h <= g.worldH()
 }
 
 func initialBlockers(dumpTrucks bool) []threats.Blocker {

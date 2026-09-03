@@ -25,8 +25,13 @@ func TestGlanceSparksOnce(t *testing.T) {
 	g := New()
 	g.Silence()
 	g.startRun()
-	g.dozer.X = 224
-	g.dozer.Y = 700
+	b := g.lot.BuildingByID(lot.TargetSheriff)
+	if b == nil {
+		t.Fatal("missing sheriff")
+	}
+	g.dozer.X = b.X + b.W/2
+	g.dozer.Y = b.Y + b.H + DozerBodyR - 1
+	g.dozer.Heading = 0
 	g.dozer.BladeDown = false
 	g.glanceBuildings()
 	if len(g.fx.Bursts) != 1 {
@@ -42,9 +47,14 @@ func TestJerseyChipSparksOnce(t *testing.T) {
 	g := New()
 	g.Silence()
 	g.startRun()
-	g.blockers = []threats.Blocker{threats.Jersey(208, 704, 48, 16, 8)}
-	g.dozer.X = 224
-	g.dozer.Y = 730
+	b := g.lot.BuildingByID(lot.TargetSheriff)
+	if b == nil {
+		t.Fatal("missing sheriff")
+	}
+	jersey := threats.Jersey(b.X+8, b.Y+b.H+18, 48, 16, 8)
+	g.blockers = []threats.Blocker{jersey}
+	g.dozer.X = jersey.X + jersey.W/2
+	g.dozer.Y = jersey.Y + DozerBodyR + 1
 	g.dozer.Heading = 0
 	g.dozer.BladeDown = true
 	bx, by, bw, bh := bladeAABB(g.dozer.X, g.dozer.Y, g.dozer.Heading, true)

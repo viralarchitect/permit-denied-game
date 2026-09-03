@@ -21,8 +21,9 @@ func TestHarnessTitleSpaceStartsRun(t *testing.T) {
 	if s.Title != WindowTitle {
 		t.Fatalf("title=%q", s.Title)
 	}
-	if s.Y != SpawnY || s.X != SpawnX {
-		t.Fatalf("spawn %v,%v want %v,%v", s.X, s.Y, SpawnX, SpawnY)
+	wantX, wantY, _ := countySpawn(t)
+	if s.Y != wantY || s.X != wantX {
+		t.Fatalf("spawn %v,%v want %v,%v", s.X, s.Y, wantX, wantY)
 	}
 	if s.Stance != "BLADE UP" {
 		t.Fatalf("stance=%s", s.Stance)
@@ -46,13 +47,14 @@ func TestHarnessWMovesNorthThroughUpdate(t *testing.T) {
 	if err := g.Drive(Input{BladeToggle: true}, Keys{}); err != nil {
 		t.Fatal(err)
 	}
+	y0 := g.dozer.Y
 	for i := 0; i < TPS; i++ {
 		if err := g.Drive(Input{Throttle: 1}, Keys{}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if g.dozer.Y >= SpawnY-40 {
-		t.Fatalf("W 1s via Drive: Y=%v want < %v", g.dozer.Y, SpawnY-40)
+	if g.dozer.Y >= y0-40 {
+		t.Fatalf("W 1s via Drive: Y=%v want < %v", g.dozer.Y, y0-40)
 	}
 }
 

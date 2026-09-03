@@ -282,12 +282,16 @@ func DrawTally(dst *ebiten.Image, t Tally) {
 	}
 }
 
-
 func drawGround(dst *ebiten.Image, v View, a *atlas) {
 	if v.Procedural {
 		drawProceduralGround(dst, v)
 		return
 	}
+	if len(a.ground) == 0 || len(a.ground[0]) == 0 {
+		return
+	}
+	mapH := len(a.ground)
+	mapW := len(a.ground[0])
 	x0 := int(v.CamX)/tile - 1
 	y0 := int(v.CamY)/tile - 1
 	x1 := int(v.CamX+screenW)/tile + 2
@@ -298,11 +302,11 @@ func drawGround(dst *ebiten.Image, v View, a *atlas) {
 	if y0 < 0 {
 		y0 = 0
 	}
-	if x1 > lotW/tile {
-		x1 = lotW / tile
+	if x1 > mapW {
+		x1 = mapW
 	}
-	if y1 > lotH/tile {
-		y1 = lotH / tile
+	if y1 > mapH {
+		y1 = mapH
 	}
 	for ty := y0; ty < y1; ty++ {
 		for tx := x0; tx < x1; tx++ {

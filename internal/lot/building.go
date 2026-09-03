@@ -49,6 +49,12 @@ type Building struct {
 	Value      int // structure $ when fully rubble
 	Material   Material
 	Role       Role
+	// Authored rubble settings come from the frozen pack/destructible contract.
+	// Legacy literal maps leave these zeroed and keep their hardcoded fallback.
+	AuthoredRubble bool
+	SpawnsRubble   bool
+	RubbleInset    float64
+	RubbleRamp     bool
 }
 
 type Rubble struct { // axis-aligned, colliding unless Ramp

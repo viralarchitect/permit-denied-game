@@ -6,6 +6,7 @@ import (
 	"permitdenied/internal/audio"
 	"permitdenied/internal/capitol"
 	"permitdenied/internal/dozer"
+	"permitdenied/internal/dozerpack"
 	"permitdenied/internal/fx"
 	"permitdenied/internal/lot"
 	"permitdenied/internal/mapgen"
@@ -47,12 +48,13 @@ type Game struct {
 	progress  meta.Save
 	metaPath  string
 
-	mapW, mapH float64
-	clockSec   float64
-	procedural bool
-	stallTicks int
-	buryTicks  int
-	newUnlocks []string
+	mapW, mapH         float64
+	clockSec           float64
+	procedural         bool
+	stallTicks         int
+	buryTicks          int
+	newUnlocks         []string
+	countyCruiserSpots []dozerpack.SpawnPoint
 
 	outsideW, outsideH int
 	debug              bool
@@ -247,15 +249,20 @@ func (g *Game) startRun() {
 	g.loadCounty()
 }
 
-func spawnPeds() []threats.Ped {
+func spawnPeds(worldW, worldH float64) []threats.Ped {
 	spots := [][2]float64{
 		{120, 1100}, {80, 980}, {160, 820}, {100, 600},
 		{520, 1100}, {560, 920}, {540, 640}, {500, 400},
 	}
 	out := make([]threats.Ped, 0, PedMax)
+	maxX := worldW - PedRadius
+	maxY := worldH - PedRadius
 	for i, s := range spots {
 		if i >= PedMax {
 			break
+		}
+		if s[0] < PedRadius || s[0] > maxX || s[1] < PedRadius || s[1] > maxY {
+			continue
 		}
 		out = append(out, threats.Ped{
 			X: s[0], Y: s[1], Alive: true,

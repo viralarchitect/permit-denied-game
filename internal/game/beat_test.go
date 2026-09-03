@@ -3,7 +3,6 @@ package game
 import (
 	"testing"
 
-	"permitdenied/internal/lot"
 	"permitdenied/internal/threats"
 )
 
@@ -19,6 +18,9 @@ func TestBeatCruisersAtTZero(t *testing.T) {
 	for _, c := range g.cruisers {
 		if c.Alive {
 			alive++
+			if !countyPointWithinWorld(g, c.X, c.Y, CruiserRadius) {
+				t.Fatalf("cruiser spawned out of bounds at %v,%v on %vx%v map", c.X, c.Y, g.worldW(), g.worldH())
+			}
 		}
 	}
 	if alive != 2 {
@@ -26,83 +28,38 @@ func TestBeatCruisersAtTZero(t *testing.T) {
 	}
 }
 
-func livingDumpAt(blockers []threats.Blocker, x, y float64) bool {
-	for _, b := range blockers {
-		if b.Kind == threats.BlockerDump && b.Alive && b.X == x && b.Y == y {
-			return true
-		}
-	}
-	return false
-}
-
-func TestBeatBlockersDumpRespectsFlags(t *testing.T) {
-	// DumpTrucks=true → beat dump at (300, 720)
+func TestBeatCountyBlockersSkipOffMapSpawns(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
+	before := len(g.blockers)
 	g.run.PressureBonus = 0
-	g.run.DumpTrucks = true
 	g.run.Tick = TBlockers * TPS
 	g.fireBeats()
-	if !livingDumpAt(g.blockers, 300, 720) {
-		t.Fatal("DumpTrucks=true: expected living dump at (300, 720)")
+	if len(g.blockers) != before {
+		t.Fatalf("blockers len=%d want %d; stale county blocker spawns should stay off the 320x288 pack map", len(g.blockers), before)
 	}
-
-	// DumpTrucks=false → no beat dump at (300, 720)
-	g2 := New()
-	g2.audio = nil
-	g2.startRun()
-	g2.run.PressureBonus = 0
-	g2.run.DumpTrucks = false
-	g2.run.Tick = TBlockers * TPS
-	g2.fireBeats()
-	if livingDumpAt(g2.blockers, 300, 720) {
-		t.Fatal("DumpTrucks=false: unexpected living dump at (300, 720)")
-	}
-
-	// Yard destroyed → DumpTrucks=false → no new living dump from blockers beat
-	g3 := New()
-	g3.audio = nil
-	g3.startRun()
-	g3.run.PressureBonus = 0
-	yard := g3.lot.BuildingByID(lot.TargetYard)
-	if yard == nil {
-		t.Fatal("missing yard")
-	}
-	g3.destroyBuilding(yard)
-	if g3.run.DumpTrucks {
-		t.Fatal("after yard destroy DumpTrucks should be false")
-	}
-	g3.run.Tick = TBlockers * TPS
-	g3.fireBeats()
-	for _, b := range g3.blockers {
-		if b.Kind == threats.BlockerDump && b.Alive {
-			t.Fatalf("YardDown path: unexpected living dump at (%v,%v)", b.X, b.Y)
+	for _, b := range g.blockers {
+		if !countyRectWithinWorld(g, b.X, b.Y, b.W, b.H) {
+			t.Fatalf("off-map blocker present at (%v,%v) size %vx%v on %vx%v map", b.X, b.Y, b.W, b.H, g.worldW(), g.worldH())
 		}
 	}
 }
 
-func TestBeatExcavatorArriveRespectsYardDown(t *testing.T) {
+func TestBeatExcavatorSkipsOffMapCountySlice(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
 	g.run.PressureBonus = 0
-	g.run.YardDown = false
+	g.run.Tick = TExAnnounce * TPS
+	g.fireBeats()
+	if g.excavator.Announced || g.fx.Banner == "HEAVY EN ROUTE" {
+		t.Fatalf("off-map county excavator should not announce on pack slice: announced=%v banner=%q", g.excavator.Announced, g.fx.Banner)
+	}
 	g.run.Tick = TExArrive * TPS
 	g.fireBeats()
-	if !g.excavator.Arrived || !g.excavator.Alive {
-		t.Fatalf("YardDown=false: Arrived=%v Alive=%v want both true", g.excavator.Arrived, g.excavator.Alive)
-	}
-
-	g2 := New()
-	g2.audio = nil
-	g2.startRun()
-	g2.run.PressureBonus = 0
-	g2.run.YardDown = true
-	g2.run.Tick = TExArrive * TPS
-	g2.fireBeats()
-	if g2.excavator.Arrived || g2.excavator.Alive {
-		t.Fatalf("YardDown=true: Arrived=%v Alive=%v want not placed", g2.excavator.Arrived, g2.excavator.Alive)
+	if g.excavator.Arrived || g.excavator.Alive {
+		t.Fatalf("off-map county excavator should not spawn on pack slice: Arrived=%v Alive=%v", g.excavator.Arrived, g.excavator.Alive)
 	}
 }
 
