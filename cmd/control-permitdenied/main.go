@@ -43,10 +43,11 @@ func doctor() error {
 	g := game.New()
 	g.Silence()
 	s := g.Snapshot()
-	spawnX, spawnY := game.SpawnX, game.SpawnY
-	if scenario, err := dozerpack.LoadEmbedded(); err == nil {
-		spawnX, spawnY, _ = scenario.Spawn()
+	scenario, err := dozerpack.LoadEmbedded()
+	if err != nil {
+		return fmt.Errorf("doctor: load embedded dozer pack: %w", err)
 	}
+	spawnX, spawnY, _ := scenario.Spawn()
 	ok := s.Scene == "title" && s.Title == game.WindowTitle
 	out := map[string]any{
 		"ok":         ok,
