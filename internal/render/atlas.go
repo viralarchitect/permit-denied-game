@@ -12,6 +12,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"permitdenied/assets"
+	"permitdenied/internal/dozerpack"
 )
 
 const (
@@ -119,38 +120,25 @@ func (a *atlas) loadFrames() error {
 	return nil
 }
 
-type lotJSON struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-	Layers struct {
-		Ground [][]int `json:"ground"`
-		Decal  [][]int `json:"decal"`
-	} `json:"layers"`
+func (a *atlas) loadLot() error {
+	scenario, err := dozerpack.LoadEmbedded()
+	if err != nil {
+		return fmt.Errorf("load dozer pack map: %w", err)
+	}
+	doc := scenario.Map()
+	a.ground = layerRows(doc.Layers.Ground, doc.Width, doc.Height)
+	a.decal = layerRows(doc.Layers.Decal, doc.Width, doc.Height)
+	return nil
 }
 
-func (a *atlas) loadLot() error {
-	b, err := assets.FS.ReadFile("usable/lot.json")
-	if err != nil {
-		return fmt.Errorf("read lot.json: %w", err)
+func layerRows(values []int, width, height int) [][]int {
+	rows := make([][]int, height)
+	for y := 0; y < height; y++ {
+		row := make([]int, width)
+		copy(row, values[y*width:(y+1)*width])
+		rows[y] = row
 	}
-	var doc lotJSON
-	if err := json.Unmarshal(b, &doc); err != nil {
-		return fmt.Errorf("parse lot.json: %w", err)
-	}
-	if doc.Width != lotW/tile || doc.Height != lotH/tile {
-		return fmt.Errorf("lot size %dx%d want %dx%d", doc.Width, doc.Height, lotW/tile, lotH/tile)
-	}
-	if len(doc.Layers.Ground) != doc.Height || len(doc.Layers.Decal) != doc.Height {
-		return fmt.Errorf("lot layers height mismatch")
-	}
-	for ty := 0; ty < doc.Height; ty++ {
-		if len(doc.Layers.Ground[ty]) != doc.Width || len(doc.Layers.Decal[ty]) != doc.Width {
-			return fmt.Errorf("lot row %d width mismatch", ty)
-		}
-	}
-	a.ground = doc.Layers.Ground
-	a.decal = doc.Layers.Decal
-	return nil
+	return rows
 }
 
 func (a *atlas) cacheTiles() {

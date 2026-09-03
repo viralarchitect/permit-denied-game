@@ -6,6 +6,7 @@ import (
 	"permitdenied/internal/attach"
 	"permitdenied/internal/capitol"
 	"permitdenied/internal/city"
+	"permitdenied/internal/dozerpack"
 	"permitdenied/internal/lot"
 	"permitdenied/internal/mapgen"
 	"permitdenied/internal/meta"
@@ -80,23 +81,30 @@ func (g *Game) applyStartKit() {
 }
 
 func (g *Game) loadCounty() {
+	scenario, err := dozerpack.LoadEmbedded()
+	if err != nil {
+		panic(err)
+	}
+	spawnX, spawnY, spawnHeading := scenario.Spawn()
 	g.scene = ScenePlay
 	g.run.Tier = 0
-	g.mapW, g.mapH = LotW, LotH
+	g.mapW = float64(scenario.Map().Width * scenario.Map().TileSize)
+	g.mapH = float64(scenario.Map().Height * scenario.Map().TileSize)
 	g.clockSec = RunSeconds
-	g.lot = lot.New(WreckHPPerTile)
-	g.dozer.X, g.dozer.Y = SpawnX, SpawnY
-	g.dozer.Heading = 0
+	g.lot = scenario.Lot()
+	g.dozer.X, g.dozer.Y = spawnX, spawnY
+	g.dozer.Heading = spawnHeading
 	g.dozer.Speed = 0
 	g.cruisers = nil
-	g.blockers = initialBlockers(true)
+	g.blockers = blockersFromPack(scenario.StartBlockers())
 	g.heavies = nil
 	g.pickups = nil
 	g.excavator = threats.Excavator{}
-	g.chopper = threats.Chopper{X: 320, Y: 40, SpotR: ChopperSpotR}
-	g.peds = spawnPeds()
+	g.chopper = threats.Chopper{X: g.mapW / 2, Y: 40, SpotR: ChopperSpotR}
+	g.peds = spawnPeds(g.mapW, g.mapH)
 	g.streets = nil
 	g.procedural = false
+	g.countyCruiserSpots = scenario.CruiserSpawns()
 	g.tower = capitol.Tower{}
 	g.beat = struct {
 		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool
@@ -122,6 +130,7 @@ func (g *Game) applyArena(a mapgen.Arena, scene Scene, tier int) {
 	g.peds = nil
 	g.streets = a.Streets
 	g.procedural = true
+	g.countyCruiserSpots = nil
 	g.tower = capitol.Tower{}
 	g.beat = struct {
 		cruisers0, blockers, chopper, exAnn, exArr, concrete, twoFam bool

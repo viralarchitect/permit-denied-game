@@ -8,29 +8,19 @@ import (
 )
 
 func poseOnWestShack(g *Game) *lot.Building {
-	var b *lot.Building
-	for i := range g.lot.Buildings {
-		if g.lot.Buildings[i].X == 64 && g.lot.Buildings[i].Y == 900 {
-			b = &g.lot.Buildings[i]
-			break
-		}
+	b := firstCountyMundane(g)
+	if b != nil {
+		poseSouthOf(g, b, true)
 	}
-	g.dozer.X = 96
-	g.dozer.Y = 964
-	g.dozer.Heading = 0
-	g.dozer.BladeDown = true
-	g.dozer.Speed = 0
 	g.dozer.Heat = 0
 	return b
 }
 
 func poseOnSheriff(g *Game) *lot.Building {
 	b := g.lot.BuildingByID(lot.TargetSheriff)
-	g.dozer.X = 224
-	g.dozer.Y = 736
-	g.dozer.Heading = 0
-	g.dozer.BladeDown = true
-	g.dozer.Speed = 0
+	if b != nil {
+		poseSouthOf(g, b, true)
+	}
 	return b
 }
 
@@ -45,9 +35,10 @@ func pulseWreck(g *Game, b *lot.Building, heatStop float64, maxTicks int) {
 }
 
 func coolOnAsphalt(g *Game, maxTicks int) {
-	g.dozer.X = SpawnX
-	g.dozer.Y = SpawnY
-	g.dozer.Heading = 0
+	x, y, heading := mustCountySpawn()
+	g.dozer.X = x
+	g.dozer.Y = y
+	g.dozer.Heading = heading
 	g.dozer.BladeDown = false
 	g.dozer.Speed = 0
 	for i := 0; i < maxTicks; i++ {
@@ -73,7 +64,7 @@ func TestWreckShackOnePulse(t *testing.T) {
 	g.startRun()
 	b := poseOnWestShack(g)
 	if b == nil {
-		t.Fatal("missing west shack at (64,900)")
+		t.Fatal("missing county mundane shack")
 	}
 	pulseWreck(g, b, HeatMax, 20*TPS)
 	if b.State != lot.InRubble {
@@ -135,8 +126,9 @@ func TestWreckChaseDuck(t *testing.T) {
 		t.Fatalf("eating ChaseVolume=%v want < 0.20", v)
 	}
 	g.dozer.BladeDown = false
-	g.dozer.X = SpawnX
-	g.dozer.Y = SpawnY
+	x, y, _ := countySpawn(t)
+	g.dozer.X = x
+	g.dozer.Y = y
 	g.stepPlay(Input{})
 	if v := g.audio.ChaseVolume(); v != 0.35 {
 		t.Fatalf("after overlap ends ChaseVolume=%v want 0.35", v)

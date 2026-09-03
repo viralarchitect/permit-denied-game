@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"permitdenied/internal/dozerpack"
 	"permitdenied/internal/game"
 )
 
@@ -42,6 +43,10 @@ func doctor() error {
 	g := game.New()
 	g.Silence()
 	s := g.Snapshot()
+	spawnX, spawnY := game.SpawnX, game.SpawnY
+	if scenario, err := dozerpack.LoadEmbedded(); err == nil {
+		spawnX, spawnY, _ = scenario.Spawn()
+	}
 	ok := s.Scene == "title" && s.Title == game.WindowTitle
 	out := map[string]any{
 		"ok":         ok,
@@ -49,7 +54,7 @@ func doctor() error {
 		"title":      s.Title,
 		"scene":      s.Scene,
 		"screen":     fmt.Sprintf("%dx%d", game.ScreenW, game.ScreenH),
-		"spawn":      []float64{game.SpawnX, game.SpawnY},
+		"spawn":      []float64{spawnX, spawnY},
 		"tps":        game.TPS,
 		"instance":   "in-process",
 		"player_exe": "not used",

@@ -1,6 +1,6 @@
-package assets
+package packs
 
 import "embed"
 
-//go:embed usable
+//go:embed dozer
 var FS embed.FS

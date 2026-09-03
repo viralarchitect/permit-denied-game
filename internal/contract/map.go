@@ -154,3 +154,15 @@ func (o MapObject) PropertyID(name string) (ID, bool, error) {
 	}
 	return id, true, nil
 }
+
+func (o MapObject) PropertyString(name string) (string, bool, error) {
+	raw, ok := o.Properties[name]
+	if !ok {
+		return "", false, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", true, fmt.Errorf("object %q property %q must be a string: %w", o.ID, name, err)
+	}
+	return value, true, nil
+}

@@ -37,11 +37,12 @@ func TestSpawnWOneSecond(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
+	y0 := g.dozer.Y
 	for i := 0; i < TPS; i++ {
 		g.stepPlay(Input{Throttle: 1})
 	}
-	if g.dozer.Y >= SpawnY-40 {
-		t.Fatalf("W 1s: Y=%v want < %v (forward should be north / decreasing Y)", g.dozer.Y, SpawnY-40)
+	if g.dozer.Y >= y0-40 {
+		t.Fatalf("W 1s: Y=%v want < %v (forward should be north / decreasing Y)", g.dozer.Y, y0-40)
 	}
 }
 
@@ -63,15 +64,11 @@ func TestBladeDownDropsSheriffHP(t *testing.T) {
 	g := New()
 	g.audio = nil
 	g.startRun()
-	g.dozer.X = 224
-	g.dozer.Y = 736
-	g.dozer.Heading = 0
-	g.dozer.BladeDown = true
-	g.dozer.Speed = 0
 	b := g.lot.BuildingByID(lot.TargetSheriff)
 	if b == nil {
 		t.Fatal("missing sheriff")
 	}
+	poseSouthOf(g, b, true)
 	hp0 := b.HP
 	for i := 0; i < 30; i++ {
 		g.stepPlay(Input{})

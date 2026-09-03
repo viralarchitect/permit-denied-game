@@ -25,14 +25,14 @@
       "id": "rubble",
       "enter_at_health_fraction": 0,
       "sprite": "permitdenied:building/rubble",
-      "collision": "ramp"
+      "collision": "solid"
     }
   ],
   "rubble_rule": {
     "spawn_collision": true,
     "inset": 2,
     "mass": 1400,
-    "ramp": true,
+    "ramp": false,
     "counts_toward_bury": true,
     "persist": true
   }

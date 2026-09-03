@@ -99,11 +99,7 @@ func (g *Game) glanceBuildings() {
 func (g *Game) destroyBuilding(b *lot.Building) {
 	b.HP = 0
 	b.State = lot.InRubble
-	if capitol.IsRampRole(b.Role) {
-		g.lot.AddRamp(b.X, b.Y, b.W, b.H, RubbleInset)
-	} else {
-		g.lot.AddRubble(b.X, b.Y, b.W, b.H, RubbleInset)
-	}
+	g.spawnBuildingRubble(*b)
 	g.run.StructCash += b.Value
 	cx, cy := b.Center()
 	g.fx.SpawnDollar(cx, cy, b.Value, DollarLife)
@@ -118,6 +114,25 @@ func (g *Game) destroyBuilding(b *lot.Building) {
 		down, _ := g.lot.NamedDown()
 		g.run.Targets = down
 	}
+}
+
+func (g *Game) spawnBuildingRubble(b lot.Building) {
+	spawn := true
+	inset := RubbleInset
+	ramp := capitol.IsRampRole(b.Role)
+	if b.AuthoredRubble {
+		spawn = b.SpawnsRubble
+		inset = b.RubbleInset
+		ramp = b.RubbleRamp
+	}
+	if !spawn {
+		return
+	}
+	if ramp {
+		g.lot.AddRamp(b.X, b.Y, b.W, b.H, inset)
+		return
+	}
+	g.lot.AddRubble(b.X, b.Y, b.W, b.H, inset)
 }
 
 func (g *Game) killBlocker(bl *threats.Blocker) {

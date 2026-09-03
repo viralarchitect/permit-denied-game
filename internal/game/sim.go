@@ -3,7 +3,6 @@ package game
 import (
 	"math"
 
-	"permitdenied/internal/capitol"
 	"permitdenied/internal/lot"
 	"permitdenied/internal/threats"
 )
@@ -493,11 +492,7 @@ func (g *Game) collapseTower() {
 			continue
 		}
 		b := &g.lot.Buildings[i]
-		if capitol.IsRampRole(b.Role) {
-			g.lot.AddRamp(b.X, b.Y, b.W, b.H, RubbleInset)
-		} else {
-			g.lot.AddRubble(b.X, b.Y, b.W, b.H, RubbleInset)
-		}
+		g.spawnBuildingRubble(*b)
 		g.run.StructCash += b.Value
 		cx, cy := b.Center()
 		g.fx.SpawnDollar(cx, cy, b.Value, DollarLife)
